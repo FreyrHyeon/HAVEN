@@ -446,4 +446,46 @@ body,button,input,textarea,summary{font-family:'HAVEN Sans','Malgun Gothic',sans
  .channel-viewer{scroll-behavior:auto}
 }
 
+/* 대사는 줄 수에 맞춰 늘어나며, 화면 가장자리에서도 전체 내용을 보여준다. */
+.pet .emote,.pet.protesting .emote,.pet.visiting .emote{
+ top:12px;left:50%;width:max-content;min-width:36px;max-width:min(220px,calc(100vw - 24px));
+ height:auto;min-height:32px;padding:7px 11px;font:500 12px/1.5 'HAVEN Sans','Malgun Gothic',sans-serif;
+ white-space:normal;word-break:keep-all;overflow-wrap:anywhere;text-align:left;letter-spacing:-.01em;
+ translate:calc(-50% + var(--bubble-x,0px)) calc(-100% + var(--bubble-y,0px));
+}
+.pet .emote[data-short=true]{font-size:16px;text-align:center;line-height:1.35}
+
+/* 기존 서체와 같은 획·숫자 비례를 쓰는 아이콘과 위치 표시. */
+:root{--font-ui:'HAVEN Sans','Malgun Gothic',sans-serif;--font-display:Georgia,serif}
+:where(button,input,textarea,select,.jump-label,.jump-index,.channel-counter,.emote){font-family:var(--font-ui)}
+.hero-actions{margin-top:28px}
+.page-end-link{width:44px;height:44px;padding:10px!important;border-radius:50%;font-family:'HAVEN Sans',sans-serif}
+.nav-arrow-icon{width:22px;height:22px;display:block;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round;transition:transform .25s,color .25s}
+.page-end-link:hover,.page-end-link:focus-visible{color:#f3c4c7;background:#e5bbc00c;box-shadow:0 0 14px #e5bbc018}
+.page-end-link[href="#home"]:hover .nav-arrow-icon{transform:translateY(-2px)}
+.page-end-link[href="#page-end"]:hover .nav-arrow-icon{transform:translateY(2px)}
+.section-jump a{justify-content:center;padding-inline:11px;font-family:'HAVEN Sans',sans-serif}
+.jump-index{position:relative;display:block;min-width:20px;text-align:center;font:550 11px/1.3 'HAVEN Sans',sans-serif;font-variant-numeric:tabular-nums;letter-spacing:.06em;color:#a89aa5;transition:color .3s,text-shadow .3s}
+.section-jump a[aria-current=location] .jump-index{color:#f4c2cc;text-shadow:0 0 12px #f2a6b280}
+.section-jump a[aria-current=location] .jump-index:before{content:'';position:absolute;width:12px;height:1px;left:50%;bottom:-6px;translate:-50% 0;background:linear-gradient(90deg,transparent,#eeb6c5,#a3d9de,transparent)}
+.section-jump .jump-label{font:550 11px/1.45 'HAVEN Sans','Malgun Gothic',sans-serif;letter-spacing:.01em;padding:7px 10px}
+
+/* 마스킹된 빛은 12.8초 안에서 아래 → 위 → 오른쪽 대각선 → 글자 끝 반짝임으로 이어진다. */
+.wordmark-light.banner-light-sequence:before,.type-seven-ink.banner-light-sequence>.type-seven-glow{display:none}
+.banner-light-sequence{--banner-period:12.8s;--banner-tint:var(--resonance-color,var(--seven-color,#f1bdc6))}
+.banner-light-pass{position:absolute;display:block;pointer-events:none;opacity:0;inset:-60% -25%;background:linear-gradient(180deg,transparent 37%,color-mix(in srgb,var(--banner-tint) 60%,transparent) 46%,#fff8eb 50%,var(--banner-tint) 53%,transparent 63%);animation-duration:var(--banner-period);animation-timing-function:linear;animation-iteration-count:infinite}
+.banner-light-pass.pass-down{animation-name:banner-pass-down}
+.banner-light-pass.pass-up{animation-name:banner-pass-up;background-image:linear-gradient(180deg,transparent 40%,#a5e1e7 47%,#fff8eb 50%,#eac4b6 54%,transparent 62%)}
+.banner-light-pass.pass-diagonal{inset:-70%;background:linear-gradient(120deg,transparent 42%,#e9b9c6 47%,#fff6e6 50%,#9cdae1 53%,transparent 58%);animation-name:banner-pass-diagonal}
+.banner-terminals{position:absolute;inset:0;pointer-events:none;z-index:4;--banner-period:12.8s}
+.banner-end-glint{position:absolute;width:22px;height:22px;margin:-11px;opacity:0;background:radial-gradient(ellipse,#fff 0 6%,#f5ddbd70 13%,transparent 60%),linear-gradient(90deg,transparent 46%,#fff5dd 50%,transparent 54%),linear-gradient(transparent 46%,#fff5dd 50%,transparent 54%);animation:banner-terminal-glint var(--banner-period) linear infinite;animation-delay:var(--tip-delay);filter:drop-shadow(0 0 4px #f7d8b8)}
+.wordmark-wrap:hover .banner-light-pass{filter:brightness(1.15)}
+.type-seven-wrap[data-power] .banner-light-pass{filter:brightness(1.3)}
+@keyframes banner-pass-down{0%,2%{transform:translateY(-65%);opacity:0}5%{opacity:.85}20%{opacity:.8}24%{transform:translateY(65%);opacity:0}100%{transform:translateY(65%);opacity:0}}
+@keyframes banner-pass-up{0%,25%{transform:translateY(65%);opacity:0}28%{opacity:.78}44%{opacity:.85}48%,100%{transform:translateY(-65%);opacity:0}}
+@keyframes banner-pass-diagonal{0%,49%{transform:translate(-60%,25%);opacity:0}53%{opacity:.8}71%{opacity:.9}76%,100%{transform:translate(60%,-25%);opacity:0}}
+@keyframes banner-terminal-glint{0%,77%,100%{opacity:0;transform:scale(.25) rotate(0)}82%{opacity:.9;transform:scale(1) rotate(20deg)}86%{opacity:.35;transform:scale(.6) rotate(35deg)}91%{opacity:.85;transform:scale(.8) rotate(45deg)}97%{opacity:0;transform:scale(.2) rotate(65deg)}}
+@media(max-width:800px){.section-jump a{padding-inline:8px}.jump-index{font-size:10px}.banner-end-glint{width:17px;height:17px;margin:-8.5px}.hero-actions{margin-top:22px}}
+@media(prefers-reduced-motion:reduce){.banner-light-pass,.banner-terminals{display:none!important}.nav-arrow-icon{transition:none;transform:none!important}}
+
 .btn,.member-card{border-radius:var(--radius,3px)}.hero-tagline{color:var(--paper)}body[data-theme=impact] .section-heading h2,body[data-theme=signal] .section-heading h2{font-family:Arial,sans-serif;font-weight:800;font-style:normal;letter-spacing:-.07em}body[data-theme=impact] .hero-center{transform:skewY(-2deg)}body[data-theme=pulse] .member-card,body[data-theme=flow] .member-card{border-radius:100px 100px 4px 4px}body[data-theme=signature] .hero-tagline{letter-spacing:.12em;font-weight:300}body[data-theme=beam] .orbit{border-radius:0;height:170px;transform:rotate(-11deg)}body[data-theme=core] .ambient:after{opacity:.3}body[data-theme=signal] .hero-logo{max-width:660px;max-height:360px;object-fit:contain}body[data-theme=signal] .hero-center{padding:10px 0}body[data-theme=signal] .btn.primary{background:var(--cyan);border-color:var(--cyan)}body[data-theme=pulse] .section-heading h2,body[data-theme=flow] .section-heading h2{font-family:Arial,sans-serif;font-weight:300;letter-spacing:-.07em}
