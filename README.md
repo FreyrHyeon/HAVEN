@@ -4,8 +4,14 @@
 
 공개 주소: https://freyrhyeon.github.io/HAVEN/
 
-멤버 카드의 표정 전환, 소개, 공식 채널 스와이프, 리틀 HAVEN의 드래그·만남·능력 반응을 제공합니다. 아직 공개되지 않은 음악은 준비 중으로 안내합니다.
+- index.html: 메인
+- members.html: 멤버 소개
+- world.html: 세계관과 네 멤버의 능력
+- content.html: 음악·콘텐츠 소식
+- channels.html: 공식 채널
 
-GitHub Pages는 main 브랜치 루트에서 배포합니다. 구조화 데이터와 canonical은 위 공개 주소를 사용합니다. 분석은 GTM-NB4JPC3V 단일 경로를 유지합니다.
+리틀 HAVEN의 집합·산책, 드래그·만남·사진 반응·능력 반응을 제공합니다. 로엔의 상세 소개는 항목 선택과 전체 읽기를 지원합니다. 원화의 표정 전환과 공식 채널 스와이프·키보드 탐색을 유지합니다. 음악은 아직 공개 준비 중입니다.
+
+GitHub Pages main 브랜치 루트 배포. canonical·JSON-LD·sitemap.xml은 각 실제 페이지 URL을 사용합니다. 분석은 GTM-NB4JPC3V 단일 경로이며 로컬 미리보기에서는 보내지 않습니다.
 
 웹폰트 라이선스: assets/fonts/Pretendard-LICENSE.txt

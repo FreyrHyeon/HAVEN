@@ -50,6 +50,7 @@ function installDrag(p){
  p.trigger.addEventListener('pointermove',e=>{
   const d=p.dragCandidate;if(!d||d.id!==e.pointerId)return;
   if(!p.drag&&Math.hypot(e.clientX-d.startX,e.clientY-d.startY)>5){
+   if(p.gatherScene)releaseGatherPet(p);
    closePet();cancelVisit(p);if(chaseScene&&(chaseScene.leader===p||chaseScene.follower===p))stopChase();
    p.dash=null;p.el.classList.remove('dashing');p.action=null;p.drag=true;p.el.dataset.state='drag';p.el.classList.add('dragging');p.el.style.opacity='1';p.el.style.pointerEvents='';setEmote(p,'!');
    eventLog('haven_character_drag_start',{member_id:p.member.id});
@@ -129,7 +130,7 @@ function emit(p,kind){
  trailLayer.append(s);s.addEventListener('animationend',()=>s.remove(),{once:true});setTimeout(()=>s.remove(),1800);
 }
 function startDash(p){
- if(paused)return false;
+ if(paused||p.gatherScene)return false;
  const {w,h,size}=bounds();
  const exitRight=p.index%2===0;
  const targetY=Math.max(125,Math.min(h-size-90,170+(p.index*.19+.11)*(h-360)));
@@ -173,7 +174,7 @@ function advanceDash(p,dt){
  }
  if(d.departOnly&&d.phase===1){p.present=false;p.el.dataset.present='false';p.dash=null;p.el.classList.remove('dashing')}
 }
-function available(p){return p.present&&!p.visitScene&&!p.drag&&!p.hover&&!p.focus&&!p.action&&!p.dash&&selectedPet!==p&&elapsed>p.nextMeeting}
+function available(p){return p.present&&!p.gatherScene&&!p.visitScene&&!p.drag&&!p.hover&&!p.focus&&!p.action&&!p.dash&&selectedPet!==p&&elapsed>p.nextMeeting}
 function stopChase(){if(!chaseScene)return;for(const p of [chaseScene.leader,chaseScene.follower]){p.protesting=false;p.el.classList.remove('protesting','chase-answer','dashing');p.resumeFrom={x:p.x,y:p.y,at:elapsed};react(p,'walk')}chaseScene=null}
 function startChase(follower){
  const leader=pets.find(p=>p.member.id==='riela');if(paused||!leader||!available(leader)||!available(follower))return false;
@@ -210,10 +211,11 @@ function meeting(now){
 function animate(now){
  if(!lastTime)lastTime=now;const dt=Math.min((now-lastTime)/1000,.05);lastTime=now;elapsed+=dt;
  const modalOpen=!!document.querySelector('dialog[open]');
- if(!paused&&!modalOpen&&elapsed>nextScene&&!chaseScene)randomPresence();
+ if(!paused&&!modalOpen&&elapsed>nextScene&&!chaseScene&&!pets.some(p=>p.gatherScene))randomPresence();
  if(!paused&&!modalOpen)advanceChase(dt);
  pets.forEach(p=>{
   if(!p.present)return;
+  if(p.gatherScene){advanceGather(p,dt,now,modalOpen);fitPetBubble(p);return;}
   if(p.visitScene&&!paused&&!modalOpen&&!p.drag)advanceVisit(p,dt);
   const chasing=chaseScene&&(chaseScene.leader===p||chaseScene.follower===p);
   const held=p.visitScene||p.drag||p.hover||p.focus||selectedPet===p||p.action||modalOpen;
@@ -265,6 +267,7 @@ function closePet(returnFocus=false){
 popover.querySelector('[data-close-pet]').addEventListener('click',()=>closePet(true));
 popover.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>{
  if(!selectedPet)return;const p=selectedPet;
+ if(p.gatherScene)releaseGatherPet(p);
  if(b.dataset.action==='dash'){
   if(paused){announce('움직임을 켜면 질주를 볼 수 있습니다.');return}
   closePet();p.trigger.blur();p.hover=false;p.focus=false;p.action=null;startDash(p);announce(p.member.ko+'가 화면 밖으로 나갔다가 다시 들어옵니다.');return;
@@ -308,7 +311,7 @@ randomPresence(true);setPaused(paused,false);frameRequest=requestAnimationFrame(
  const cards=[...document.querySelectorAll('.member-card')];
  function reset(el,keys){keys.forEach(k=>el.style.removeProperty(k))}
  const heroKeys=['--typo-rx','--typo-ry','--typo-x','--typo-y'];
- hero.addEventListener('pointerleave',()=>reset(hero,heroKeys));
+hero?.addEventListener('pointerleave',()=>reset(hero,heroKeys));
  cards.forEach((card,i)=>{
   const keys=['--photo-rx','--photo-ry','--photo-x','--photo-y','--light-x','--light-y'];
   card.style.setProperty('--reveal-delay',(i*85)+'ms');
@@ -324,11 +327,12 @@ randomPresence(true);setPaused(paused,false);frameRequest=requestAnimationFrame(
   const observer=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('is-visible');observer.unobserve(e.target)}}),{threshold:.12});
   cards.forEach(c=>observer.observe(c));
  }
- reduced.addEventListener('change',()=>{reset(hero,heroKeys);cards.forEach(c=>{c.classList.add('is-visible');reset(c,['--photo-rx','--photo-ry','--photo-x','--photo-y'])})});
+ reduced.addEventListener('change',()=>{if(hero)reset(hero,heroKeys);cards.forEach(c=>{c.classList.add('is-visible');reset(c,['--photo-rx','--photo-ry','--photo-x','--photo-y'])})});
 })();
 
 ;(()=>{
  const links=[...document.querySelectorAll('.section-jump a')];
+ if(document.body.dataset.page)return;
  const sections=links.map(a=>document.querySelector(a.getAttribute('href')));
  let scheduled=false;
  function update(){
@@ -424,6 +428,7 @@ function startPortraitGroup(target,cast){
 
 ;(()=>{
  const reduce=matchMedia('(prefers-reduced-motion: reduce)');
+ if(document.body.dataset.page)return;
  let animation=0,transitioning=false,targetIndex=0,direction=0,lastWheel=0,accum=0,lastInput=0;
  function points(){const max=document.documentElement.scrollHeight-innerHeight;const values=[0,...['members','next','channels'].map(id=>scrollY+document.getElementById(id).getBoundingClientRect().top)];if(max-values.at(-1)>80)values.push(max);return [...new Set(values.map(y=>Math.max(0,Math.min(max,Math.round(y)))))];}
  function nearest(ys){let best=0;ys.forEach((y,i)=>{if(Math.abs(y-scrollY)<Math.abs(ys[best]-scrollY))best=i});return best;}
@@ -579,7 +584,7 @@ if(profileCopy){
  });
  let mask=null,last=0,nextAuto=performance.now()+6500,raf=0;
  const maskImage=new Image();maskImage.src=source;
- maskImage.onload=()=>{const c=document.createElement('canvas');c.width=360;c.height=103;const ctx=c.getContext('2d',{willReadFrequently:true});ctx.drawImage(maskImage,0,0,360,103);mask=ctx.getImageData(0,0,360,103).data;};
+ maskImage.onload=()=>{try{const c=document.createElement('canvas');c.width=360;c.height=103;const ctx=c.getContext('2d',{willReadFrequently:true});ctx.drawImage(maskImage,0,0,360,103);mask=ctx.getImageData(0,0,360,103).data;}catch{mask=null;}};
  function visibleScene(){return [...scenes].reverse().find(s=>{const r=s.surface.getBoundingClientRect();return r.top<innerHeight*.55&&r.bottom>innerHeight*.55})||scenes[0]}
  function spark(scene,x=Math.random()*100,y=Math.random()*100,large=false){
   if(scene.ink.querySelectorAll('.type-seven-spark').length>=10)return;
@@ -686,7 +691,7 @@ if(profileCopy){
   }
   if(document.querySelector('dialog[open]')||!['KeyW','KeyS'].includes(code))return;
   e.preventDefault();lastKey=now;
-  const targets=[{id:'home',y:0},...['members','next','channels','page-end'].map(id=>({id,y:Math.min(document.documentElement.scrollHeight-innerHeight,scrollY+document.getElementById(id).getBoundingClientRect().top)}))];
+  const targets=[{id:'home',y:0},...['members','next','channels','page-end'].filter(id=>document.getElementById(id)).map(id=>({id,y:Math.min(document.documentElement.scrollHeight-innerHeight,scrollY+document.getElementById(id).getBoundingClientRect().top)}))];
   const direction=code==='KeyS'?1:-1,candidate=direction>0?targets.find(t=>t.y>scrollY+20):[...targets].reverse().find(t=>t.y<scrollY-20);
   if(candidate){const a=document.querySelector(`a[href="#${candidate.id}"]`);if(a)a.click();}
  });
@@ -714,4 +719,108 @@ if(profileCopy){
  function schedule(){if(!pending){pending=true;requestAnimationFrame(update)}}
  addEventListener('scroll',schedule,{passive:true});addEventListener('resize',schedule);document.addEventListener('visibilitychange',()=>{document.documentElement.classList.toggle('page-hidden',document.hidden);if(!document.hidden)schedule()});
  new IntersectionObserver(schedule,{threshold:[0,.5,1]}).observe(document.querySelector('.chapter-layer'));update();
+})();
+
+// 기존 이동 상태에 집합 상태를 더한다. 별도 RAF나 강제 스크롤은 만들지 않는다.
+let gatherDeadline=0;
+const gatherButton=document.querySelector('#little-gather');
+const gatherLines={loen:['다들 이쪽으로 와볼까?','좋아, 잠깐 같이 있자.','우리 여기서 만났네.'],yuria:['나도 왔지!','여기 자리 있다!','다 같이 있으니까 좋네!'],serian:['여기 있으면 되지.','다 모였네.','잠깐 쉬어갈까.'],riela:['저도 왔어요!','언니들, 같이 있어요!','별들도 데려왔어요!']};
+let gatherRound=0;
+function gatherSlots(){
+ const {w,h,size}=bounds(),mobile=w<600,cols=mobile?2:4;
+ const gap=mobile?20:12,width=cols*size+(cols-1)*gap;
+ const left=Math.max(12,w-width-(mobile?64:80));
+ const top=Math.max(105,h-(mobile?2*size+126:size+142));
+ return pets.map((p,i)=>({x:left+(i%cols)*(size+gap),y:top+Math.floor(i/cols)*(size+38)}));
+}
+function releaseGatherPet(p){
+ if(!p.gatherScene)return;
+ p.gatherScene=null;p.el.classList.remove('gathering','gathered','gather-speaking');p.action=null;
+ p.resumeFrom={x:p.x,y:p.y,at:elapsed+.3};p.returnHold=elapsed+.3;p.nextDash=elapsed+14+p.index*2;p.nextMeeting=elapsed+7;react(p,'walk');
+}
+function releaseGather(){
+ pets.forEach(releaseGatherPet);gatherDeadline=0;nextScene=elapsed+12;
+ gatherButton?.setAttribute('aria-pressed','false');
+ if(gatherButton){const label=gatherButton.querySelector('.gather-label');label.textContent='리틀 HAVEN 집합';label.dataset.typeLight=label.textContent;}
+ announce('리틀 HAVEN이 다시 산책합니다.');
+}
+function gatherPets(){
+ if(pets.some(p=>p.gatherScene)){releaseGather();return;}
+ closePet();stopChase();const slots=gatherSlots();gatherRound++;
+ pets.forEach((p,i)=>{
+  cancelVisit(p);p.dash=null;p.action=null;p.el.classList.remove('dashing','protesting','chase-answer','landing');
+  if(!p.present){enterPet(p,true);p.x=innerWidth+100+i*45;p.y=slots[i].y;}
+  p.hover=false;p.focus=false;p.el.style.pointerEvents='';p.el.style.opacity='1';
+  p.gatherScene={from:{x:p.x,y:p.y},t:0,slot:i,arrived:false};p.el.classList.add('gathering');
+ });
+ gatherDeadline=performance.now()+12500;gatherButton.setAttribute('aria-pressed','true');
+ const label=gatherButton.querySelector('.gather-label');label.textContent='다시 산책';label.dataset.typeLight=label.textContent;
+ announce('로엔, 유리아, 세리안, 리엘라가 오른쪽 아래로 모입니다.');eventLog('haven_character_gather',{interaction_type:'gather',member_count:4});
+}
+function advanceGather(p,dt,now,modalOpen){
+ const scene=p.gatherScene;if(!scene)return;
+ if(now>gatherDeadline&&!modalOpen&&!p.drag){releaseGather();return;}
+ if(p.drag){releaseGatherPet(p);return;}
+ if(!modalOpen)scene.t+=dt;
+ const target=gatherSlots()[scene.slot],duration=.95+p.index*.13;
+ const progress=paused?1:Math.min(scene.t/duration,1),q=1-Math.pow(1-progress,3);
+ if(!p.hover&&!p.focus&&selectedPet!==p){p.x=scene.from.x+(target.x-scene.from.x)*q;p.y=scene.from.y+(target.y-scene.from.y)*q;}
+ p.el.style.transform=`translate(${Math.round(p.x)}px,${Math.round(p.y)}px)`;
+ p.el.style.opacity='1';p.el.style.pointerEvents='';
+ if(progress===1&&!scene.arrived){
+  scene.arrived=true;p.el.classList.remove('gathering');p.el.classList.add('gathered');p.el.dataset.state='wave';
+  const bank=gatherLines[p.member.id];setEmote(p,bank[(gatherRound-1)%bank.length]);
+ }
+ p.el.classList.toggle('gather-speaking',scene.arrived&&Math.floor(Math.max(0,scene.t-1.5)/2.1)%4===scene.slot);
+ draw(p,paused?0:progress<1?[0,1,0,2][Math.floor(elapsed*9)%4]:[4,5][Math.floor(elapsed*3)%2]);
+}
+gatherButton?.addEventListener('click',gatherPets);
+addEventListener('resize',()=>pets.forEach(p=>{if(p.gatherScene){p.gatherScene.from={x:p.x,y:p.y};p.gatherScene.t=0;}}));
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&pets.some(p=>p.gatherScene))gatherDeadline=performance.now()+8000;});
+
+// 사용자가 참조한 「HAVEN 멤버 소개 문구 구상」의 로엔 소개 원문.
+window.HAVEN_PROFILE_TOPICS={"loen":[{"id":"first","category":"성격과 행동","title":"처음 만나도, 이야기는 천천히.","paragraphs":["로엔과의 대화는 거창한 이야기가 없어도 이어집니다. 오늘 있었던 작은 일이나 문득 떠오른 생각을 꺼내면, 로엔은 그 안에서 함께 웃을 부분을 찾고 자기 이야기도 조금씩 보탭니다. 처음이라 말을 고르는 시간이 생겨도 느긋하게 기다려 줍니다. 하고 싶었던 말을 천천히 꺼내다 보면 어느새 처음의 어색함을 잊게 되는 사람입니다."]},{"id":"talk","category":"성격과 행동","title":"당신의 이야기에, 로엔의 생각을 조금.","paragraphs":["다른 사람의 이야기를 듣고 있을 때도 로엔만의 반응은 분명합니다. 공감되는 말에는 고개를 끄덕이고, 궁금한 부분은 한 번 더 물어봅니다. 자기 생각이 다르면 솔직하게 말하고, 이야기를 듣다 마음이 바뀌면 그것도 자연스럽게 인정합니다. 좋아하는 것에 관해서는 조금 더 길게 이야기하고 싶어 하고, 함께 해보고 싶은 일이 생기면 먼저 제안하기도 합니다. 부드러운 말투 속에 자기 생각과 취향이 또렷하게 들어 있습니다."]},{"id":"play","category":"성격과 행동","title":"그 한마디에, 같이 웃게 될 거예요.","paragraphs":["편해질수록 장난기도 드러납니다. 다른 멤버가 열심히 설명하는 것을 듣다가 짧게 한마디를 보태는데, 그 말에 주변이 웃으면 로엔도 슬쩍 웃습니다. 자기가 한 농담이 생각보다 잘 통하면 조금 뿌듯한 표정을 짓기도 합니다. 그러다 다른 멤버가 장난을 되돌려주면 웃으며 받아주고, 자신이 먼저 민망해지는 순간에는 잠깐 시선을 피했다가 다시 대화에 끼어듭니다. 단정한 첫인상에 익숙해질 무렵 발견하게 되는, 함께 웃고 싶어지는 모습입니다."]},{"id":"together","category":"성격과 행동","title":"하고 싶은 이야기를, 함께 꺼내봐요.","paragraphs":["함께 무언가를 할 때는 먼저 방향을 잡아주는 편입니다. 하고 싶은 것이 있으면 이유를 설명하고, 다른 사람은 어떻게 생각하는지 묻습니다. 자신이 맡은 일에는 책임감을 갖고 움직이면서도 다른 멤버의 좋은 생각을 반갑게 받아들입니다. 누군가 앞에 나서고 싶어 할 때는 그 사람이 마음껏 해볼 수 있도록 곁에서 함께합니다. 로엔이 있는 자리에서는 각자의 생각을 꺼내고, 그중 무엇을 함께 해볼지 이야기할 수 있습니다."]},{"id":"care","category":"성격과 행동","title":"기억해 준 마음은, 오래 남아요.","paragraphs":["로엔도 챙김을 받으면 기뻐합니다. 누군가 자신을 위해 준비한 것을 건네거나, 무심코 했던 말을 기억해 주면 표정이 한결 부드러워집니다. 고맙다는 말을 건네고도 그것을 한 번 더 들여다보거나, 나중에 다시 그 이야기를 꺼냅니다. 평소에는 여유롭게 말을 이어가다가도 진심 어린 칭찬 앞에서는 잠시 다음 말을 고릅니다. 그런 순간에 로엔의 마음이 가까이 보입니다."]},{"id":"impression","category":"첫인상과 분위기","title":"단정한 첫인상, 그 안의 다채로운 표정.","paragraphs":["처음 눈에 들어오는 로엔은 우아하고 차분합니다. 서두르지 않는 움직임과 상대를 바라보는 시선에 여유가 있고, 말을 건네면 부드러운 미소로 맞아줍니다. 처음 찾아온 사람도 자신의 속도로 인사하고 이야기를 시작할 수 있는 분위기입니다.","잠깐 이야기를 나누면 그 단정함 안에서 표정이 꽤 다채롭게 바뀐다는 것을 알게 됩니다. 재미있는 말을 들었을 때 먼저 풀리는 눈빛, 자기 취향을 이야기할 때 조금 더 생기 있어지는 얼굴, 뜻밖의 칭찬에 웃음을 고르는 순간까지. 로엔을 알아가는 즐거움은 이런 작은 반응들을 하나씩 발견하는 데 있습니다. 한 번 대화를 나누고 나면 다음에는 어떤 이야기를 꺼내볼까 생각하게 됩니다."]},{"id":"stage","category":"첫인상과 분위기","title":"무대 위에서도, 다시 마주한 미소에도.","paragraphs":["무대에서는 그 여유에 선명한 집중이 더해집니다. 관객을 바라보고 자기 순간을 이끌 때는 확신이 느껴지고, 멤버들과 함께할 때는 서로의 표현을 받아주며 무대를 이어갑니다. 공연이 끝나고 다시 편안하게 웃으며 말을 건네면, 조금 전까지 무대를 채우던 사람이 한층 가깝게 느껴집니다. 무대에서 본 모습도, 이야기를 나누며 알게 된 모습도 모두 로엔에게 자연스럽게 이어져 있습니다."]},{"id":"hello","category":"직접 자기소개","title":"“안녕하세요, 로엔이에요.”","paragraphs":["안녕하세요, 로엔이에요. 처음 찾아와 주셔서 반가워요.","처음 인사할 때는 무슨 말을 하면 좋을지 잠깐 고민하게 되죠. 저는 오늘 있었던 작은 이야기부터 듣는 것도 좋아해요. 우연히 본 게 재미있었다거나, 별생각 없이 고른 게 마음에 들었다거나. 그렇게 이야기를 듣다 보면 저도 떠오르는 게 있어서, 어느새 제 이야기를 하고 있더라고요. 천천히 서로 알아가면 좋겠어요.","저는 좋아하는 것이 생기면 함께 나누고 싶어지는 편이에요. 제가 어떤 부분을 좋아하는지 이야기하고, 다른 사람은 무엇을 눈여겨봤는지 듣는 시간이 즐겁거든요. 같은 것을 보고도 서로 다른 이야기를 할 때가 있잖아요. 그러면 다음에 다시 볼 때는 그 사람이 해준 말도 생각나요.","그리고 조금 편해지면 장난도 쳐요. 가끔 한마디 했는데 다들 웃으면 꽤 기분이 좋고요. 저한테도 편하게 장난 걸어주셔도 돼요. 잘 받아칠 생각은 하고 있는데…… 제가 먼저 웃어버릴 수도 있겠네요.","함께할 때는 제가 할 수 있는 일을 잘하고 싶어요. 앞에 서야 할 순간에는 먼저 나서고, 누군가 보여주고 싶은 것이 있을 때는 곁에서 함께하고 싶고요. 저도 하고 싶은 게 많아서, 앞으로 하나씩 보여드릴 생각이에요.","오늘은 이렇게 인사했으니까, 다음에 만나면 조금 더 편하게 이야기할 수 있겠죠. 그때는 저도 새로운 이야기를 가져올게요. 함께 웃을 일이 많아졌으면 좋겠어요."]}]};
+
+// 페이지가 없어도 링크는 일반 HTML 탐색으로 동작한다.
+;(()=>{
+ const legacy={members:'members.html',next:'content.html',channels:'channels.html',world:'world.html'};
+ if(document.body.dataset.page==='home'&&legacy[location.hash.slice(1)])location.replace(legacy[location.hash.slice(1)]+location.hash);
+ document.querySelectorAll('.gather-label,.world-tab strong,.world-tab small,.profile-topic').forEach(addTypeLight);
+ const dialog=document.querySelector('#profile-dialog'),reader=dialog.querySelector('.profile-reader');
+ const topics=window.HAVEN_PROFILE_TOPICS||{};let active=[];
+ function showTopic(index){
+  const article=reader.querySelector('.profile-article');article.replaceChildren();
+  const selected=index<0?active:[active[index]];
+  let lastCategory='';
+  for(const topic of selected){
+   if(topic.category!==lastCategory){const title=document.createElement('h3');title.textContent=topic.category;article.append(title);lastCategory=topic.category;}
+   for(const line of topic.paragraphs){const p=document.createElement('p');p.textContent=line;article.append(p);}
+  }
+  reader.querySelectorAll('.profile-topic').forEach((b,i)=>b.setAttribute('aria-pressed',String(index===i-1)));
+  article.scrollTop=0;
+ }
+ document.querySelectorAll('.member-card').forEach(card=>card.addEventListener('click',()=>{
+  active=topics[card.dataset.member]||[];reader.hidden=!active.length;
+  const tabs=reader.querySelector('.profile-topics');tabs.replaceChildren();
+  if(!active.length)return;
+  const labels={first:'첫 만남',talk:'대화',play:'장난기',together:'함께할 때',care:'마음을 받으면',impression:'첫인상',stage:'무대',hello:'로엔의 인사'};
+  ['전체 읽기',...active.map(t=>labels[t.id]||t.title)].forEach((label,i)=>{const b=document.createElement('button');b.type='button';b.className='profile-topic';const text=document.createElement('span');text.textContent=label;b.append(text);b.title=i?active[i-1].title:'소개 전체 읽기';b.setAttribute('aria-controls','profile-article');b.addEventListener('click',()=>showTopic(i-1));tabs.append(b);addTypeLight(text);});
+  showTopic(0);
+ }));
+ const worldTabs=[...document.querySelectorAll('.world-tab')],worldPanel=document.querySelector('.world-panel');
+ function chooseWorld(index){
+  const m=members[index];if(!worldPanel)return;
+  worldPanel.dataset.ability=m.id;worldPanel.style.setProperty('--world-color',m.color);
+  worldPanel.querySelector('h2').textContent=m.ko;
+  worldPanel.querySelector('.world-power').textContent=m.power;
+  worldPanel.querySelector('.world-detail').textContent=window.HAVEN_WORLD_DETAILS[m.id];
+  worldPanel.setAttribute('aria-labelledby','world-tab-'+index);
+  worldTabs.forEach((b,i)=>{b.setAttribute('aria-selected',String(i===index));b.tabIndex=i===index?0:-1;});
+  const link=worldPanel.querySelector('.world-member-link');link.href='members.html?member='+m.id;link.setAttribute('aria-label',m.ko+' 소개 보기');
+  if(!motionQuery.matches)worldPanel.querySelector('.world-copy').animate([{opacity:.4},{opacity:1}],{duration:260});
+ }
+ worldTabs.forEach((b,i)=>{b.addEventListener('click',()=>chooseWorld(i));b.addEventListener('keydown',e=>{let next;if(['ArrowRight','ArrowDown'].includes(e.key))next=(i+1)%4;else if(['ArrowLeft','ArrowUp'].includes(e.key))next=(i+3)%4;else if(e.key==='Home')next=0;else if(e.key==='End')next=3;if(next!==undefined){e.preventDefault();chooseWorld(next);worldTabs[next].focus();}});});
+ if(worldPanel)chooseWorld(0);
+ const requested=new URLSearchParams(location.search).get('member');
+ if(requested){const card=document.querySelector(`.member-card[data-member="${CSS.escape(requested)}"]`);if(card)card.click();}
 })();
