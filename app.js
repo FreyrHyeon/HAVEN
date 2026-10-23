@@ -1,3 +1,13 @@
+// 문서는 유지하고 페이지 콘텐츠의 효과만 정리·다시 연결한다.
+const havenPageMounts=[],havenPageCleanups=[];
+function registerPageMount(mount){havenPageMounts.push(mount);const dispose=mount();if(typeof dispose==='function')havenPageCleanups.push(dispose);}
+window.HavenMountPage=()=>{
+ havenPageCleanups.splice(0).reverse().forEach(dispose=>dispose());
+ havenPageMounts.forEach(mount=>{const dispose=mount();if(typeof dispose==='function')havenPageCleanups.push(dispose);});
+ document.dispatchEvent(new CustomEvent('haven:page-mounted'));
+};
+window.HavenBeforePageSwap=()=>{document.querySelectorAll('dialog[open]').forEach(dialog=>dialog.close());closePet();stopChase();pets.forEach(cancelVisit);trailLayer.replaceChildren();nextVisit=elapsed+2;};
+
 'use strict';
 const members = window.HAVEN_MEMBERS;
 const motionQuery=matchMedia('(prefers-reduced-motion: reduce)');
@@ -210,7 +220,7 @@ function meeting(now){
 }
 function animate(now){
  if(!lastTime)lastTime=now;const dt=Math.min((now-lastTime)/1000,.05);lastTime=now;elapsed+=dt;
- const modalOpen=!!document.querySelector('dialog[open]');
+ const modalOpen=!!document.querySelector('dialog[open]')||!!window.HavenRouteBusy;
  if(!paused&&!modalOpen&&elapsed>nextScene&&!chaseScene&&!pets.some(p=>p.gatherScene))randomPresence();
  if(!paused&&!modalOpen)advanceChase(dt);
  pets.forEach(p=>{
@@ -281,6 +291,7 @@ document.addEventListener('pointerdown',e=>{if(selectedPet&&!popover.contains(e.
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&selectedPet)closePet(true)});
 addEventListener('resize',()=>{pets.forEach(position);if(selectedPet)placePopover(selectedPet)});
 const profile=document.querySelector('#profile-dialog');
+registerPageMount(()=>{
 document.querySelectorAll('.member-card').forEach(b=>b.addEventListener('click',async e=>{
  if(e.pointerType==='touch'&&!motionQuery.matches){b.classList.add('is-photo-preview');await new Promise(resolve=>setTimeout(resolve,360));}
  closePet();const m=members.find(m=>m.id===b.dataset.member);
@@ -295,16 +306,18 @@ document.querySelectorAll('.member-card').forEach(b=>b.addEventListener('click',
 
  profile.showModal();eventLog('haven_member_open',{member_id:m.id});
 }));
+});
+
 document.querySelectorAll('dialog').forEach(d=>{
  d.querySelector('.close').addEventListener('click',()=>d.close());
  d.addEventListener('click',e=>{if(e.target===d){const r=d.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)d.close()}});
 });
 document.querySelector('#privacy-open').addEventListener('click',()=>document.querySelector('#privacy-dialog').showModal());
-document.querySelectorAll('[data-platform]').forEach(a=>a.addEventListener('click',()=>eventLog('haven_channel_click',{platform:a.dataset.platform})));
+registerPageMount(()=>document.querySelectorAll('main [data-platform]').forEach(a=>a.addEventListener('click',()=>eventLog('haven_channel_click',{platform:a.dataset.platform}))));
 randomPresence(true);setPaused(paused,false);frameRequest=requestAnimationFrame(animate);
 
 
-;(()=>{
+registerPageMount(()=>{
  const reduced=matchMedia('(prefers-reduced-motion: reduce)');
  const fine=matchMedia('(hover:hover) and (pointer:fine)');
  const hero=document.querySelector('.hero-center');
@@ -322,13 +335,16 @@ hero?.addEventListener('pointerleave',()=>reset(hero,heroKeys));
   });
   card.addEventListener('pointerleave',()=>reset(card,keys));
  });
+ let observer=null;
  if(!reduced.matches&&'IntersectionObserver' in window){
   document.documentElement.classList.add('motion-ready');
-  const observer=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('is-visible');observer.unobserve(e.target)}}),{threshold:.12});
+  observer=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('is-visible');observer.unobserve(e.target)}}),{threshold:.12});
   cards.forEach(c=>observer.observe(c));
  }
- reduced.addEventListener('change',()=>{if(hero)reset(hero,heroKeys);cards.forEach(c=>{c.classList.add('is-visible');reset(c,['--photo-rx','--photo-ry','--photo-x','--photo-y'])})});
-})();
+ const change=()=>{if(hero)reset(hero,heroKeys);cards.forEach(c=>{c.classList.add('is-visible');reset(c,['--photo-rx','--photo-ry','--photo-x','--photo-y'])})};
+ reduced.addEventListener('change',change);
+ return ()=>{observer?.disconnect();reduced.removeEventListener('change',change);};
+});
 
 ;(()=>{
  const links=[...document.querySelectorAll('.section-jump a')];
@@ -490,9 +506,12 @@ function activateResonance(member,anchor=null,source='hover'){
  resonanceTimer=setTimeout(()=>{delete document.body.dataset.resonance;document.documentElement.style.removeProperty('--resonance-color')},4000);
  eventLog('haven_member_resonance',{member_id:member.id,source});
 }
+registerPageMount(()=>{
 document.querySelectorAll('.section-heading h2').forEach((h,i)=>{
  const light=document.createElement('span');light.className='heading-downlight';light.setAttribute('aria-hidden','true');light.textContent=h.textContent;light.style.animationDelay=(i*.8)+'s';h.append(light);
 });
+});
+
 pets.forEach(p=>{
  p.trigger.addEventListener('pointerenter',e=>{if(e.pointerType!=='touch')activateResonance(p.member)});
  p.trigger.addEventListener('pointerdown',e=>{if(e.pointerType==='touch')activateResonance(p.member)});
@@ -513,6 +532,7 @@ function addAbilityEdge(layer,member){
 }
 
 // 소개를 열기 전부터 보이는 멤버별 호버·키보드 초점 연출.
+registerPageMount(()=>{
 document.querySelectorAll('.member-card').forEach(card=>{
  const member=members.find(m=>m.id===card.dataset.member);if(!member)return;
  const alternate=card.querySelector('.portrait-alternate');
@@ -523,6 +543,8 @@ document.querySelectorAll('.member-card').forEach(card=>{
  card.addEventListener('pointerenter',e=>{if(e.pointerType!=='touch')preview()});
  card.addEventListener('focus',()=>{if(card.matches(':focus-visible'))preview()});
 });
+});
+
 const profileVisual=document.querySelector('.profile-visual');
 if(profileVisual){
  const fx=document.createElement('span');fx.className='resonance-fx card-hover-fx card-flow-fx';fx.setAttribute('aria-hidden','true');profileVisual.append(fx);addAbilityEdge(fx,members[0]);
@@ -534,12 +556,15 @@ function addTypeLight(el){
  el.classList.add('type-shimmer');
  el.dataset.typeLight=el.innerText||el.textContent;
 }
+registerPageMount(()=>{
 document.querySelectorAll('.eyebrow,.section-note,.member-caption small,.member-caption strong,.channel strong,.jump-label,.jump-index,.status-tag,.brand').forEach(addTypeLight);
 document.querySelectorAll('.site-header nav a,.btn,.text-button,.scroll-mark,.popover-top strong,.actions button').forEach(el=>{
  [...el.childNodes].filter(n=>n.nodeType===Node.TEXT_NODE&&n.textContent.trim()).forEach(n=>{
   const label=document.createElement('span');label.textContent=n.textContent;el.replaceChild(label,n);addTypeLight(label);
  });
 });
+});
+
 const profileCopy=document.querySelector('.profile-copy');
 if(profileCopy){
  const observer=new MutationObserver(()=>profileCopy.querySelectorAll('h2,.ko-name').forEach(el=>{addTypeLight(el);el.dataset.typeLight=el.innerText||el.textContent}));
@@ -547,7 +572,7 @@ if(profileCopy){
 }
 
 // 원화 네 장과 기존 단체 무대 이미지의 전환. 캐릭터 보행을 흉내 내지 않는다.
-;(() => {
+registerPageMount(()=>{
  const hero=document.querySelector('.hero'),slides=[...document.querySelectorAll('.hero-member-slide')];
  if(!hero||slides.length!==4)return;
  const reduce=matchMedia('(prefers-reduced-motion: reduce)');
@@ -562,15 +587,18 @@ if(profileCopy){
   if(reduce.matches||document.hidden||!onScreen||!frontVisible)return;
   timer=setTimeout(()=>{show((index+1)%(slides.length+1));schedule()},4800);
  }
- reduce.addEventListener('change',()=>{show(reduce.matches?4:0);schedule()});
+ const change=()=>{show(reduce.matches?4:0);schedule()};
+ reduce.addEventListener('change',change);
  document.addEventListener('visibilitychange',schedule);
- document.addEventListener('haven:surface',e=>{frontVisible=e.detail.home;schedule()});
- new IntersectionObserver(entries=>{onScreen=entries[0].isIntersecting;schedule()},{threshold:.1}).observe(hero);
+ const surface=e=>{frontVisible=e.detail.home;schedule()};
+ document.addEventListener('haven:surface',surface);
+ const observer=new IntersectionObserver(entries=>{onScreen=entries[0].isIntersecting;schedule()},{threshold:.1});observer.observe(hero);
  show(reduce.matches?4:0);schedule();
-})();
+ return ()=>{clearTimeout(timer);observer.disconnect();reduce.removeEventListener('change',change);document.removeEventListener('visibilitychange',schedule);document.removeEventListener('haven:surface',surface);};
+});
 
 // 7번 타이포만 움직이는 배경 광원. 본문·카드·클릭 영역의 위치는 바꾸지 않는다.
-;(()=>{
+registerPageMount(()=>{
  const source=new URL('assets/typography-07.webp',location.href).href;
  const reduce=matchMedia('(prefers-reduced-motion: reduce)');
  const surfaces=[...document.querySelectorAll('.hero,.chapter-layer>.section')];
@@ -634,14 +662,18 @@ if(profileCopy){
   }
   if(!document.hidden)raf=requestAnimationFrame(frame);
  }
- document.addEventListener('visibilitychange',()=>{if(document.hidden){cancelAnimationFrame(raf);raf=0}else if(!raf&&!reduce.matches){last=0;nextAuto=performance.now()+6500;raf=requestAnimationFrame(frame)}});
- reduce.addEventListener('change',()=>{scenes.forEach(s=>{delete s.word.dataset.power;s.power='';s.powerUntil=0;s.word.style.removeProperty('--seven-x');s.word.style.removeProperty('--seven-y');s.word.style.removeProperty('--seven-r');s.ink.querySelectorAll('.type-seven-spark').forEach(i=>i.remove())});if(reduce.matches){cancelAnimationFrame(raf);raf=0}else if(!raf&&!document.hidden)raf=requestAnimationFrame(frame)});
+ const visibility=()=>{if(document.hidden){cancelAnimationFrame(raf);raf=0}else if(!raf&&!reduce.matches){last=0;nextAuto=performance.now()+6500;raf=requestAnimationFrame(frame)}};
+ document.addEventListener('visibilitychange',visibility);
+ const change=()=>{scenes.forEach(s=>{delete s.word.dataset.power;s.power='';s.powerUntil=0;s.word.style.removeProperty('--seven-x');s.word.style.removeProperty('--seven-y');s.word.style.removeProperty('--seven-r');s.ink.querySelectorAll('.type-seven-spark').forEach(i=>i.remove())});if(reduce.matches){cancelAnimationFrame(raf);raf=0}else if(!raf&&!document.hidden)raf=requestAnimationFrame(frame)};
+ reduce.addEventListener('change',change);
  window.HavenAmbient={interact,get state(){const s=visibleScene();return {member:s.word.dataset.power||null,source:s.word.dataset.interaction||null,scene:s.surface.id||'home'}}};
  raf=requestAnimationFrame(frame);
-})();
+ return ()=>{cancelAnimationFrame(raf);document.removeEventListener('visibilitychange',visibility);reduce.removeEventListener('change',change);};
+});
 
 // 사진 자체를 이동하지 않고 표정에 맞는 작은 반응만 겹친다.
-;(()=>{
+registerPageMount(()=>{
+ const observers=[];
  const ns='http://www.w3.org/2000/svg';
  const art={
   loen:`<defs><radialGradient id="loen-cheek"><stop stop-color="#f26c91" stop-opacity=".65"/><stop offset=".55" stop-color="#ef7095" stop-opacity=".3"/><stop offset="1" stop-color="#f68ca8" stop-opacity="0"/></radialGradient></defs><g class="reaction-blush"><ellipse cx="305" cy="655" rx="82" ry="39" fill="url(#loen-cheek)"/><ellipse cx="665" cy="628" rx="75" ry="37" fill="url(#loen-cheek)"/><path d="M 252 642 l -9 19 M 275 642 l -9 19 M 650 616 l -8 18 M 674 615 l -8 18" fill="none" stroke="#f6a1b2" stroke-width="4" stroke-linecap="round" opacity=".48"/></g><path class="reaction-mark reaction-warm" d="M 775 410 C 755 390 731 417 775 449 C 819 417 795 390 775 410" fill="#efbdba"/>`,
@@ -652,7 +684,7 @@ if(profileCopy){
  document.querySelectorAll('.member-card').forEach(card=>{
   const id=card.dataset.member,svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox','0 0 960 1200');svg.setAttribute('aria-hidden','true');svg.classList.add('portrait-reaction');svg.dataset.reaction=id;svg.innerHTML=art[id]||'';card.append(svg);
   const fit=()=>{const scale=Math.max(card.clientWidth/960,card.clientHeight/1200),w=960*scale,h=1200*scale;svg.style.width=w+'px';svg.style.height=h+'px';svg.style.left=(card.clientWidth-w)/2+'px';svg.style.top=(card.clientHeight-h)*.28+'px';};
-  new ResizeObserver(fit).observe(card);fit();
+  const observer=new ResizeObserver(fit);observer.observe(card);observers.push(observer);fit();
   const activate=()=>card.classList.add('expression-active');
   const deactivate=()=>card.classList.remove('expression-active');
   card.addEventListener('pointerenter',e=>{if(e.pointerType!=='touch')activate()});
@@ -660,8 +692,10 @@ if(profileCopy){
   card.addEventListener('focus',()=>{if(card.matches(':focus-visible'))activate()});card.addEventListener('blur',deactivate);
   card.addEventListener('pointerdown',e=>{if(e.pointerType==='touch')activate()});card.addEventListener('pointercancel',deactivate);
  });
- document.querySelector('#profile-dialog').addEventListener('close',()=>document.querySelectorAll('.member-card').forEach(card=>card.classList.remove('expression-active','is-photo-preview')));
-})();
+ const close=()=>document.querySelectorAll('.member-card').forEach(card=>card.classList.remove('expression-active','is-photo-preview'));
+ document.querySelector('#profile-dialog').addEventListener('close',close);
+ return ()=>{observers.forEach(o=>o.disconnect());document.querySelector('#profile-dialog').removeEventListener('close',close);};
+});
 
 ;(()=>{
  const data=window.HAVEN_CHANNELS,dialog=document.querySelector('#channel-dialog'),viewer=dialog.querySelector('.channel-viewer');let current=0,gesture=null,lastKey=0;
@@ -672,10 +706,13 @@ if(profileCopy){
   const link=dialog.querySelector('.channel-visit');link.href=channel.url;link.dataset.platform=channel.name;link.setAttribute('aria-label',channel.name+' 공식 채널 새 창에서 열기');
   if(animate&&!motionQuery.matches)viewer.animate([{opacity:.5,transform:'translateX(10px)'},{opacity:1,transform:'translateX(0)'}],{duration:240,easing:'ease-out'});
  }
+registerPageMount(()=>{
  document.querySelectorAll('.channel-card').forEach(card=>{
   const c=data.find(c=>c.id===card.dataset.channel),fx=document.createElement('span');fx.className='resonance-fx card-hover-fx card-flow-fx';fx.setAttribute('aria-hidden','true');card.append(fx);addAbilityEdge(fx,{id:'channel',color:c.color});
   card.addEventListener('click',()=>{closePet();render(Number(card.dataset.channel),false);dialog.showModal();eventLog('haven_channel_preview',{platform:c.name})});
  });
+});
+
  dialog.querySelector('.channel-prev').addEventListener('click',()=>render(current-1));dialog.querySelector('.channel-next').addEventListener('click',()=>render(current+1));
  dialog.querySelector('.channel-visit').addEventListener('click',()=>eventLog('haven_channel_click',{platform:data[current].name}));
  viewer.addEventListener('pointerdown',e=>{if(e.button!==0||e.target.closest('a,button'))return;gesture={id:e.pointerId,x:e.clientX,y:e.clientY,drag:false};viewer.setPointerCapture(e.pointerId)});
@@ -698,7 +735,7 @@ if(profileCopy){
 })();
 
 // 글자 위치는 고정하고 마스킹한 빛만 아래·위·대각선·끝점 순서로 반복한다.
-;(()=>{
+registerPageMount(()=>{
  const entries=[...document.querySelectorAll('.wordmark-light,.type-seven-ink')];
  for(const ink of entries){
   ink.classList.add('banner-light-sequence');
@@ -710,16 +747,17 @@ if(profileCopy){
   points.forEach(([x,y],i)=>{const glint=document.createElement('i');glint.className='banner-end-glint';glint.style.left=x+'%';glint.style.top=y+'%';glint.style.setProperty('--tip-delay',i?'.32s':'0s');terminals.append(glint)});
   host.append(terminals);
  }
-})();
+});
 
 // 화면 밖의 장식은 멈추고, 사용자 조작과 리틀 HAVEN의 동작은 별도로 유지한다.
-;(()=>{
- const surfaces=[...document.querySelectorAll('.hero,.chapter-layer>.section')];let pending=false;
- function update(){pending=false;const marker=innerHeight*.55,current=[...surfaces].reverse().find(el=>{const r=el.getBoundingClientRect();return r.top<marker&&r.bottom>marker})||surfaces[0];surfaces.forEach(el=>el.classList.toggle('fx-idle',el!==current));document.dispatchEvent(new CustomEvent('haven:surface',{detail:{home:current===surfaces[0]}}));}
- function schedule(){if(!pending){pending=true;requestAnimationFrame(update)}}
- addEventListener('scroll',schedule,{passive:true});addEventListener('resize',schedule);document.addEventListener('visibilitychange',()=>{document.documentElement.classList.toggle('page-hidden',document.hidden);if(!document.hidden)schedule()});
- new IntersectionObserver(schedule,{threshold:[0,.5,1]}).observe(document.querySelector('.chapter-layer'));update();
-})();
+registerPageMount(()=>{
+ const surfaces=[...document.querySelectorAll('.hero,.chapter-layer>.section')];let pending=false,disposed=false,request=0;
+ function update(){if(disposed)return;pending=false;const marker=innerHeight*.55,current=[...surfaces].reverse().find(el=>{const r=el.getBoundingClientRect();return r.top<marker&&r.bottom>marker})||surfaces[0];surfaces.forEach(el=>el.classList.toggle('fx-idle',el!==current));document.dispatchEvent(new CustomEvent('haven:surface',{detail:{home:current===surfaces[0]}}));}
+ function schedule(){if(!pending){pending=true;request=requestAnimationFrame(update)}}
+ addEventListener('scroll',schedule,{passive:true});addEventListener('resize',schedule);const visibility=()=>{document.documentElement.classList.toggle('page-hidden',document.hidden);if(!document.hidden)schedule()};document.addEventListener('visibilitychange',visibility);
+ const observer=new IntersectionObserver(schedule,{threshold:[0,.5,1]});observer.observe(document.querySelector('.chapter-layer'));update();
+ return ()=>{disposed=true;cancelAnimationFrame(request);observer.disconnect();removeEventListener('scroll',schedule);removeEventListener('resize',schedule);document.removeEventListener('visibilitychange',visibility);};
+});
 
 // 기존 이동 상태에 집합 상태를 더한다. 별도 RAF나 강제 스크롤은 만들지 않는다.
 let gatherDeadline=0;
@@ -782,9 +820,9 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&pets.some
 window.HAVEN_PROFILE_TOPICS={"loen":[{"id":"first","category":"성격과 행동","title":"처음 만나도, 이야기는 천천히.","paragraphs":["로엔과의 대화는 거창한 이야기가 없어도 이어집니다. 오늘 있었던 작은 일이나 문득 떠오른 생각을 꺼내면, 로엔은 그 안에서 함께 웃을 부분을 찾고 자기 이야기도 조금씩 보탭니다. 처음이라 말을 고르는 시간이 생겨도 느긋하게 기다려 줍니다. 하고 싶었던 말을 천천히 꺼내다 보면 어느새 처음의 어색함을 잊게 되는 사람입니다."]},{"id":"talk","category":"성격과 행동","title":"당신의 이야기에, 로엔의 생각을 조금.","paragraphs":["다른 사람의 이야기를 듣고 있을 때도 로엔만의 반응은 분명합니다. 공감되는 말에는 고개를 끄덕이고, 궁금한 부분은 한 번 더 물어봅니다. 자기 생각이 다르면 솔직하게 말하고, 이야기를 듣다 마음이 바뀌면 그것도 자연스럽게 인정합니다. 좋아하는 것에 관해서는 조금 더 길게 이야기하고 싶어 하고, 함께 해보고 싶은 일이 생기면 먼저 제안하기도 합니다. 부드러운 말투 속에 자기 생각과 취향이 또렷하게 들어 있습니다."]},{"id":"play","category":"성격과 행동","title":"그 한마디에, 같이 웃게 될 거예요.","paragraphs":["편해질수록 장난기도 드러납니다. 다른 멤버가 열심히 설명하는 것을 듣다가 짧게 한마디를 보태는데, 그 말에 주변이 웃으면 로엔도 슬쩍 웃습니다. 자기가 한 농담이 생각보다 잘 통하면 조금 뿌듯한 표정을 짓기도 합니다. 그러다 다른 멤버가 장난을 되돌려주면 웃으며 받아주고, 자신이 먼저 민망해지는 순간에는 잠깐 시선을 피했다가 다시 대화에 끼어듭니다. 단정한 첫인상에 익숙해질 무렵 발견하게 되는, 함께 웃고 싶어지는 모습입니다."]},{"id":"together","category":"성격과 행동","title":"하고 싶은 이야기를, 함께 꺼내봐요.","paragraphs":["함께 무언가를 할 때는 먼저 방향을 잡아주는 편입니다. 하고 싶은 것이 있으면 이유를 설명하고, 다른 사람은 어떻게 생각하는지 묻습니다. 자신이 맡은 일에는 책임감을 갖고 움직이면서도 다른 멤버의 좋은 생각을 반갑게 받아들입니다. 누군가 앞에 나서고 싶어 할 때는 그 사람이 마음껏 해볼 수 있도록 곁에서 함께합니다. 로엔이 있는 자리에서는 각자의 생각을 꺼내고, 그중 무엇을 함께 해볼지 이야기할 수 있습니다."]},{"id":"care","category":"성격과 행동","title":"기억해 준 마음은, 오래 남아요.","paragraphs":["로엔도 챙김을 받으면 기뻐합니다. 누군가 자신을 위해 준비한 것을 건네거나, 무심코 했던 말을 기억해 주면 표정이 한결 부드러워집니다. 고맙다는 말을 건네고도 그것을 한 번 더 들여다보거나, 나중에 다시 그 이야기를 꺼냅니다. 평소에는 여유롭게 말을 이어가다가도 진심 어린 칭찬 앞에서는 잠시 다음 말을 고릅니다. 그런 순간에 로엔의 마음이 가까이 보입니다."]},{"id":"impression","category":"첫인상과 분위기","title":"단정한 첫인상, 그 안의 다채로운 표정.","paragraphs":["처음 눈에 들어오는 로엔은 우아하고 차분합니다. 서두르지 않는 움직임과 상대를 바라보는 시선에 여유가 있고, 말을 건네면 부드러운 미소로 맞아줍니다. 처음 찾아온 사람도 자신의 속도로 인사하고 이야기를 시작할 수 있는 분위기입니다.","잠깐 이야기를 나누면 그 단정함 안에서 표정이 꽤 다채롭게 바뀐다는 것을 알게 됩니다. 재미있는 말을 들었을 때 먼저 풀리는 눈빛, 자기 취향을 이야기할 때 조금 더 생기 있어지는 얼굴, 뜻밖의 칭찬에 웃음을 고르는 순간까지. 로엔을 알아가는 즐거움은 이런 작은 반응들을 하나씩 발견하는 데 있습니다. 한 번 대화를 나누고 나면 다음에는 어떤 이야기를 꺼내볼까 생각하게 됩니다."]},{"id":"stage","category":"첫인상과 분위기","title":"무대 위에서도, 다시 마주한 미소에도.","paragraphs":["무대에서는 그 여유에 선명한 집중이 더해집니다. 관객을 바라보고 자기 순간을 이끌 때는 확신이 느껴지고, 멤버들과 함께할 때는 서로의 표현을 받아주며 무대를 이어갑니다. 공연이 끝나고 다시 편안하게 웃으며 말을 건네면, 조금 전까지 무대를 채우던 사람이 한층 가깝게 느껴집니다. 무대에서 본 모습도, 이야기를 나누며 알게 된 모습도 모두 로엔에게 자연스럽게 이어져 있습니다."]},{"id":"hello","category":"직접 자기소개","title":"“안녕하세요, 로엔이에요.”","paragraphs":["안녕하세요, 로엔이에요. 처음 찾아와 주셔서 반가워요.","처음 인사할 때는 무슨 말을 하면 좋을지 잠깐 고민하게 되죠. 저는 오늘 있었던 작은 이야기부터 듣는 것도 좋아해요. 우연히 본 게 재미있었다거나, 별생각 없이 고른 게 마음에 들었다거나. 그렇게 이야기를 듣다 보면 저도 떠오르는 게 있어서, 어느새 제 이야기를 하고 있더라고요. 천천히 서로 알아가면 좋겠어요.","저는 좋아하는 것이 생기면 함께 나누고 싶어지는 편이에요. 제가 어떤 부분을 좋아하는지 이야기하고, 다른 사람은 무엇을 눈여겨봤는지 듣는 시간이 즐겁거든요. 같은 것을 보고도 서로 다른 이야기를 할 때가 있잖아요. 그러면 다음에 다시 볼 때는 그 사람이 해준 말도 생각나요.","그리고 조금 편해지면 장난도 쳐요. 가끔 한마디 했는데 다들 웃으면 꽤 기분이 좋고요. 저한테도 편하게 장난 걸어주셔도 돼요. 잘 받아칠 생각은 하고 있는데…… 제가 먼저 웃어버릴 수도 있겠네요.","함께할 때는 제가 할 수 있는 일을 잘하고 싶어요. 앞에 서야 할 순간에는 먼저 나서고, 누군가 보여주고 싶은 것이 있을 때는 곁에서 함께하고 싶고요. 저도 하고 싶은 게 많아서, 앞으로 하나씩 보여드릴 생각이에요.","오늘은 이렇게 인사했으니까, 다음에 만나면 조금 더 편하게 이야기할 수 있겠죠. 그때는 저도 새로운 이야기를 가져올게요. 함께 웃을 일이 많아졌으면 좋겠어요."]}]};
 
 // 페이지가 없어도 링크는 일반 HTML 탐색으로 동작한다.
-;(()=>{
+registerPageMount(()=>{
  const legacy={members:'members.html',next:'content.html',channels:'channels.html',world:'world.html'};
- if(document.body.dataset.page==='home'&&legacy[location.hash.slice(1)])location.replace(legacy[location.hash.slice(1)]+location.hash);
+ if(document.body.dataset.page==='home'&&legacy[location.hash.slice(1)])queueMicrotask(()=>window.HavenNavigate(legacy[location.hash.slice(1)]+location.hash,{historyMode:'replace'}));
  document.querySelectorAll('.gather-label,.world-tab strong,.world-tab small,.profile-topic').forEach(addTypeLight);
  const dialog=document.querySelector('#profile-dialog'),reader=dialog.querySelector('.profile-reader');
  const topics=window.HAVEN_PROFILE_TOPICS||{};let active=[];
@@ -823,4 +861,4 @@ window.HAVEN_PROFILE_TOPICS={"loen":[{"id":"first","category":"성격과 행동"
  if(worldPanel)chooseWorld(0);
  const requested=new URLSearchParams(location.search).get('member');
  if(requested){const card=document.querySelector(`.member-card[data-member="${CSS.escape(requested)}"]`);if(card)card.click();}
-})();
+});
