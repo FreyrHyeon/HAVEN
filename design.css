@@ -550,6 +550,33 @@ body[data-page] .section-jump a[aria-current=page] .jump-index:before{content:''
  .profile-article{max-height:32svh}.profile-topics{max-height:125px}.profile-copy:has(.profile-reader:not([hidden])){padding-top:25px}
 }
 @media(prefers-reduced-motion:reduce){.world-art *{animation:none!important}.little-gather{transition:none}}
+
+/* 페이지를 아래→위로 덮고, 이전 페이지로 갈 때는 현재 장면을 아래로 걷어낸다. */
+@view-transition{navigation:auto}
+body[data-page] .site-header{view-transition-name:haven-header}
+body[data-page] .section-jump{view-transition-name:haven-page-rail}
+body[data-page] .little-gather{view-transition-name:haven-gather}
+::view-transition-group(root){animation:none}
+::view-transition-image-pair(root){isolation:isolate}
+::view-transition-old(root),::view-transition-new(root){mix-blend-mode:normal;animation-duration:640ms;animation-timing-function:cubic-bezier(.2,.75,.2,1);animation-fill-mode:both;backface-visibility:hidden}
+::view-transition-old(root){animation-name:haven-layer-stay;z-index:1}
+::view-transition-new(root){animation-name:haven-layer-rise;z-index:2}
+html[data-page-direction=back]::view-transition-old(root){animation-name:haven-layer-lower;z-index:2}
+html[data-page-direction=back]::view-transition-new(root){animation-name:haven-layer-stay;z-index:1}
+::view-transition-group(haven-header),::view-transition-group(haven-page-rail),::view-transition-group(haven-gather){z-index:10;animation-duration:640ms;animation-timing-function:cubic-bezier(.2,.75,.2,1)}
+::view-transition-old(haven-header),::view-transition-new(haven-header),::view-transition-old(haven-page-rail),::view-transition-new(haven-page-rail),::view-transition-old(haven-gather),::view-transition-new(haven-gather){animation-duration:180ms}
+@keyframes haven-layer-stay{from,to{transform:translateY(0);opacity:1}}
+@keyframes haven-layer-rise{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@keyframes haven-layer-lower{from{transform:translateY(0)}to{transform:translateY(100%)}}
+html.page-enter main{animation:haven-page-fallback 420ms cubic-bezier(.2,.75,.2,1) both}
+@keyframes haven-page-fallback{from{opacity:.35;translate:0 var(--page-entry,56px)}to{opacity:1;translate:0 0}}
+html.page-enter[data-page-direction=back] main{animation-direction:normal;--page-entry:-36px}
+html.page-transition-active .hero-logo,html.page-transition-active .banner-light-pass{animation-play-state:paused}
+@media(prefers-reduced-motion:reduce){
+ @view-transition{navigation:none}
+ ::view-transition-group(*),::view-transition-old(*),::view-transition-new(*){animation:none!important}
+ html.page-enter main{animation:none}
+}
 .banner-light-sequence{--banner-period:12.8s;--banner-tint:var(--resonance-color,var(--seven-color,#f1bdc6))}
 .banner-light-pass{position:absolute;display:block;pointer-events:none;opacity:0;inset:-60% -25%;background:linear-gradient(180deg,transparent 37%,color-mix(in srgb,var(--banner-tint) 60%,transparent) 46%,#fff8eb 50%,var(--banner-tint) 53%,transparent 63%);animation-duration:var(--banner-period);animation-timing-function:linear;animation-iteration-count:infinite}
 .banner-light-pass.pass-down{animation-name:banner-pass-down}
