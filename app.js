@@ -312,7 +312,6 @@ document.querySelectorAll('dialog').forEach(d=>{
  d.querySelector('.close').addEventListener('click',()=>d.close());
  d.addEventListener('click',e=>{if(e.target===d){const r=d.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)d.close()}});
 });
-document.querySelector('#privacy-open').addEventListener('click',()=>document.querySelector('#privacy-dialog').showModal());
 registerPageMount(()=>document.querySelectorAll('main [data-platform]').forEach(a=>a.addEventListener('click',()=>eventLog('haven_channel_click',{platform:a.dataset.platform}))));
 randomPresence(true);setPaused(paused,false);frameRequest=requestAnimationFrame(animate);
 
