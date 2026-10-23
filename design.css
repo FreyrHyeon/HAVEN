@@ -100,13 +100,15 @@ html{scroll-snap-type:y proximity;scroll-padding-top:0}
 .channel{padding:18px 0}.channel small{margin-top:6px}
 .pet-trigger{touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
 .pet.dragging{z-index:15}.pet.dragging .pet-trigger{cursor:grabbing}
+.pet-trigger:focus-visible,.pet.dragging .pet-trigger{outline:none;box-shadow:none}
+.pet-trigger:focus-visible canvas{filter:drop-shadow(0 0 5px var(--member)) drop-shadow(0 3px 8px #0007)}
 .pet.dragging canvas{rotate:var(--drag-tilt,0deg);translate:0 -7px;transition:rotate .13s ease-out;animation:little-dangle .6s steps(2) infinite}
 .pet.dragging .emote,.pet.protesting .emote,.pet.chase-answer .emote,.pet.visiting .emote{opacity:1;transform:translateY(0)}
 .pet.protesting .emote,.pet.visiting .emote{font-size:11px;white-space:nowrap;width:max-content;height:auto;left:50%;translate:-50% 0;max-width:185px;padding:7px 10px}
 .pet.landing canvas{animation:little-land .43s ease-out}
 @keyframes little-dangle{50%{translate:0 -11px}}
 @keyframes little-land{0%{scale:1.06 .82;translate:0 5px}55%{scale:.96 1.04;translate:0 -2px}100%{scale:1;translate:0 0}}
-.little-visited{outline:1px solid var(--visitor-color,#f2a6b2);outline-offset:4px;box-shadow:0 0 24px color-mix(in srgb,var(--visitor-color,#f2a6b2) 25%,transparent)!important}
+.little-visited{box-shadow:0 0 24px color-mix(in srgb,var(--visitor-color,#f2a6b2) 25%,transparent)!important}
 .little-visited[data-little-visitor=loen]{animation:little-rose-light 1.1s ease-in-out 3}
 .little-visited[data-little-visitor=yuria]:after{opacity:1;background:radial-gradient(ellipse at 80% 85%,#93dbe035,transparent 48%);animation:little-water 1.2s ease-out 3}
 .little-visited[data-little-visitor=serian]{translate:0 -4px;transition:translate .6s ease}

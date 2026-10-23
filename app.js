@@ -464,7 +464,6 @@ function activateResonance(member,anchor=null,source='hover'){
   if(source!=='card_preview'){
   const fx=document.createElement('span');fx.className='resonance-fx resonance-'+member.id;fx.setAttribute('aria-hidden','true');
   fx.dataset.ability=member.id;fx.style.setProperty('--resonance-color',member.color);
-  addAbilityEdge(fx,member);
   for(let i=0;i<6;i++){const dot=document.createElement('i');dot.style.setProperty('--i',i);dot.textContent=member.id==='riela'?'✦':'';fx.append(dot)}
   target.classList.add('resonance-anchor');target.append(fx);resonanceLayers.add(fx);
   if(resonanceLayers.size>8){const oldest=resonanceLayers.values().next().value;oldest.remove();resonanceLayers.delete(oldest)}
