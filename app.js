@@ -20,10 +20,19 @@ const popover=document.querySelector('#pet-popover');
 const live=document.querySelector('#interaction-status');
 let selectedPet=null,lastTime=0,elapsed=0,frameRequest=0,nextScene=18;
 let chaseScene=null;
+// GTM이 로드한 기존 Google tag로만 전송한다. 별도 config/page_view는 생성하지 않는다.
+const havenAnalyticsEvents=new Set(['haven_character_drag_start','haven_character_drag_end','haven_motion_toggle','haven_character_interact','haven_member_open','haven_channel_click','haven_character_page_interact','haven_member_resonance','haven_channel_preview','haven_character_gather']);
 const eventLog=(event,extra={})=>{
-  // 별도 gtag를 초기화하지 않는다. 기존 GTM dataLayer를 사용한다.
-  if(location.protocol!=='file:'&&location.hostname!=='127.0.0.1'&&location.hostname!=='localhost')
-    (window.dataLayer=window.dataLayer||[]).push({event,...extra});
+  if(location.origin!=='https://freyrhyeon.github.io'||!/^\/HAVEN\/(?:index\.html|members\.html|world\.html|content\.html|channels\.html)?$/.test(location.pathname)||!havenAnalyticsEvents.has(event))return;
+  const parameters={send_to:'G-M3GPMZEZMQ',page_location:location.origin+location.pathname,page_title:document.title,transport_type:'beacon'};
+  for(const key of ['member_id','target_member','interaction_type','motion_state','platform','source','member_count']){
+    const value=extra[key];
+    if(typeof value==='number'&&Number.isFinite(value))parameters[key]=value;
+    else if(typeof value==='string'&&value.length<=64&&!/[\r\n@<>]/.test(value))parameters[key]=value;
+  }
+  // 객체 event push만으로는 GA4 전송이 되지 않는다. 공개 GTM에는 해당 이벤트 태그가 없다.
+  function command(){(window.dataLayer=window.dataLayer||[]).push(arguments)}
+  command('event',event,parameters);
 };
 function announce(text){live.textContent=text}
 const pets=members.map((member,i)=>{
@@ -100,7 +109,7 @@ function setPaused(value,persist=true){
 
  if(persist)try{localStorage.setItem('haven-motion',value?'paused':'playing')}catch{}
  if(value){stopChase();pets.forEach(cancelVisit);trailLayer.replaceChildren();pets.forEach(p=>{p.dash=null;p.el.classList.remove('dashing');if(p.present)position(p);p.el.style.opacity='1';p.el.style.pointerEvents='';if(!p.action)draw(p,0)})}
- eventLog('haven_motion_toggle',{motion_state:value?'paused':'playing'});
+ if(persist)eventLog('haven_motion_toggle',{motion_state:value?'paused':'playing'});
 }
 
 motionQuery.addEventListener('change',e=>setPaused(e.matches,false));
