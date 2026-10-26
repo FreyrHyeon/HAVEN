@@ -21,29 +21,46 @@ const live=document.querySelector('#interaction-status');
 let selectedPet=null,lastTime=0,elapsed=0,frameRequest=0,nextScene=18;
 let chaseScene=null;
 // GTM이 로드한 기존 Google tag로만 전송한다. 별도 config/page_view는 생성하지 않는다.
+
 const havenAnalyticsEvents=new Set(['haven_character_drag_start','haven_character_drag_end','haven_motion_toggle','haven_character_interact','haven_member_open','haven_channel_click','haven_character_page_interact','haven_member_resonance','haven_channel_preview','haven_character_gather']);
+
 const eventLog=(event,extra={})=>{
+
   if(location.origin!=='https://freyrhyeon.github.io'||!/^\/HAVEN\/(?:index\.html|members\.html|world\.html|content\.html|channels\.html)?$/.test(location.pathname)||!havenAnalyticsEvents.has(event))return;
+
   const parameters={send_to:'G-M3GPMZEZMQ',page_location:location.origin+location.pathname,page_title:document.title,transport_type:'beacon'};
+
   for(const key of ['member_id','target_member','interaction_type','motion_state','platform','source','member_count']){
+
     const value=extra[key];
+
     if(typeof value==='number'&&Number.isFinite(value))parameters[key]=value;
+
     else if(typeof value==='string'&&value.length<=64&&!/[\r\n@<>]/.test(value))parameters[key]=value;
+
   }
+
   // 객체 event push만으로는 GA4 전송이 되지 않는다. 공개 GTM에는 해당 이벤트 태그가 없다.
+
   function command(){(window.dataLayer=window.dataLayer||[]).push(arguments)}
+
   command('event',event,parameters);
+
 };
+
 function announce(text){live.textContent=text}
 const pets=members.map((member,i)=>{
  const el=document.createElement('div');el.className='pet';el.style.setProperty('--member',member.color);el.dataset.member=member.id;el.dataset.state='walk';
- const trigger=document.createElement('button');trigger.type='button';trigger.className='pet-trigger';trigger.dataset.name=member.ko;trigger.setAttribute('aria-label',member.ko+'와 상호작용');trigger.setAttribute('aria-expanded','false');trigger.setAttribute('aria-controls','pet-popover');
+ const trigger=document.createElement('button');trigger.type='button';trigger.className='pet-trigger';trigger.dataset.name=member.ko;trigger.setAttribute('aria-label',member.ko+((member.ko.charCodeAt(member.ko.length-1)-0xac00)%28?'과':'와')+' 상호작용');trigger.setAttribute('aria-expanded','false');trigger.setAttribute('aria-controls','pet-popover');
  const canvas=document.createElement('canvas');canvas.width=192;canvas.height=192;canvas.setAttribute('aria-hidden','true');trigger.append(canvas);
  const emote=document.createElement('span');emote.className='emote';emote.setAttribute('aria-hidden','true');emote.textContent=member.emote;trigger.append(emote);el.append(trigger);petLayer.append(el);
+ const reactionIcon=document.createElement('span');reactionIcon.className='pet-reaction-icon';reactionIcon.setAttribute('aria-hidden','true');trigger.append(reactionIcon);
  const image=new Image();image.src=member.atlas;const ctx=canvas.getContext('2d');ctx.imageSmoothingEnabled=false;
  const p={member,el,trigger,canvas,ctx,image,x:0,y:0,clock:i*7+Math.random()*35,hover:false,focus:false,action:null,actionUntil:0,lastEmit:0,ready:false,index:i,dash:null,nextDash:12+i*7,present:false,nextMeeting:0,meetingUntil:0};
+ p.reactionIcon=reactionIcon;
  el.dataset.present='false';
  image.onload=()=>{p.ready=true;draw(p,0)};
+ if(member.poseAtlas){p.poseImage=new Image();p.poseImage.src=member.poseAtlas;p.poseImage.onload=()=>{p.poseReady=true;p.lastDrawn=null;draw(p,0,'pose')}}
  if(member.extraAtlas){p.extraImage=new Image();p.extraImage.src=member.extraAtlas;p.extraImage.onload=()=>{p.lastDrawn=null}}
  trigger.addEventListener('pointerenter',e=>{if(e.pointerType!=='touch'){p.hover=true;if(!p.drag)react(p,'hover')}});
  trigger.addEventListener('pointerleave',()=>{p.hover=false;if(!p.focus&&selectedPet!==p&&!p.action)el.dataset.state='walk'});
@@ -54,11 +71,15 @@ const pets=members.map((member,i)=>{
  return p;
 });
 function rectFor(p,index){return p.member.frames[Math.min(index,p.member.frames.length-1)]}
-function draw(p,index,kind='motion'){
- const key=kind+'-'+index;if(!p.ready||p.lastDrawn===key)return;
+function draw(p,index,kind='motion',facing=0){
+ const flip=facing>0&&(kind==='chase'||kind==='pose'&&index>=8);
+ const key=kind+'-'+index+'-'+flip;if(!p.ready||p.lastDrawn===key)return;
  let im=p.image,r=rectFor(p,index);
+ if(kind==='pose'&&p.poseReady){im=p.poseImage;r=p.member.poseFrames[index];}
  if(kind!=='motion'&&p.extraImage?.complete&&p.extraImage.naturalWidth){const frames=p.member.extraFrames?.[kind];if(frames?.length){im=p.extraImage;r=frames[index%frames.length]}}
- p.lastDrawn=key;p.ctx.clearRect(0,0,192,192);p.ctx.drawImage(im,r.x,r.y,r.w,r.h,0,0,192,192);
+ p.lastDrawn=key;p.ctx.clearRect(0,0,192,192);p.ctx.save();
+ if(flip){p.ctx.translate(192,0);p.ctx.scale(-1,1);}
+ p.ctx.drawImage(im,r.x,r.y,r.w,r.h,r.dx??0,r.dy??0,r.dw??192,r.dh??192);p.ctx.restore();
 }
 function installDrag(p){
  p.trigger.addEventListener('pointerdown',e=>{
@@ -72,6 +93,7 @@ function installDrag(p){
    if(p.gatherScene)releaseGatherPet(p);
    closePet();cancelVisit(p);if(chaseScene&&(chaseScene.leader===p||chaseScene.follower===p))stopChase();
    p.dash=null;p.el.classList.remove('dashing');p.action=null;p.drag=true;p.el.dataset.state='drag';p.el.classList.add('dragging');p.el.style.opacity='1';p.el.style.pointerEvents='';setEmote(p,'!');
+   showPetReaction(p,'drag');
    eventLog('haven_character_drag_start',{member_id:p.member.id});
   }
   if(!p.drag)return;e.preventDefault();
@@ -92,6 +114,7 @@ function installDrag(p){
 }
 function react(p,state){
  p.el.dataset.state=state;setEmote(p,state==='sing'?'♪ ♫':state==='heart'?'♥':state==='wave'?'안녕':p.member.emote);
+ if(state!=='walk'&&state!=='idle')showPetReaction(p,state);
 }
 function setEmote(p,text){const bubble=p.el.querySelector('.emote');if(bubble.textContent!==text)bubble.textContent=text;bubble.dataset.short=String(text.trim().length<=4)}
 function fitPetBubble(p){
@@ -139,18 +162,11 @@ function blocked(p){
 let scrollingUntil=0;
 addEventListener('scroll',()=>{blockerStamp=-1;scrollingUntil=performance.now()+140},{passive:true});
 addEventListener('resize',()=>{blockerStamp=-1});
-function emit(p,kind){
- if(paused||trailLayer.childElementCount>52)return;
- const s=document.createElement('span');s.className='mote power-'+p.member.id+(kind==='heart'?' heart':'');s.style.setProperty('--member',p.member.color);
- s.style.setProperty('--drift',(Math.random()*54-27)+'px');s.style.setProperty('--spin',(Math.random()*180-90)+'deg');
- if(p.member.id==='riela'){s.textContent='✦';s.style.color=['#b9dde3','#f4dcaa','#d9b8eb','#f0b5bf'][Math.floor(Math.random()*4)];s.style.animationDuration=(1.2+Math.random()*1.3)+'s'}
- s.style.left=(p.x+24+Math.random()*35)+'px';s.style.top=(p.y+75)+'px';
- if(kind==='heart')s.textContent='♥';
- trailLayer.append(s);s.addEventListener('animationend',()=>s.remove(),{once:true});setTimeout(()=>s.remove(),1800);
-}
+function emit(p,kind){return emitAbility(p,kind);}
 function startDash(p){
  if(paused||p.gatherScene)return false;
  const {w,h,size}=bounds();
+ p.restUntil=0;
  const exitRight=p.index%2===0;
  const targetY=Math.max(125,Math.min(h-size-90,170+(p.index*.19+.11)*(h-360)));
  p.dash={phase:0,t:0,from:{x:p.x,y:p.y},exit:{x:exitRight?w+size+35:-size-35,y:targetY},entry:{x:exitRight?-size-35:w+size+35,y:targetY+25},home:{x:w*(exitRight?.27:.68),y:Math.max(125,Math.min(h-size-95,targetY+40))},duration:.42};
@@ -197,7 +213,8 @@ function available(p){return p.present&&!p.gatherScene&&!p.visitScene&&!p.drag&&
 function stopChase(){if(!chaseScene)return;for(const p of [chaseScene.leader,chaseScene.follower]){p.protesting=false;p.el.classList.remove('protesting','chase-answer','dashing');p.resumeFrom={x:p.x,y:p.y,at:elapsed};react(p,'walk')}chaseScene=null}
 function startChase(follower){
  const leader=pets.find(p=>p.member.id==='riela');if(paused||!leader||!available(leader)||!available(follower))return false;
- const {w,h,size}=bounds();chaseScene={leader,follower,t:0,duration:4.2,x:leader.x,y:leader.y,followerRawX:follower.x,dir:leader.x<w/2?1:-1,history:[{t:0,x:leader.x,y:leader.y}]};
+ const {w,h,size}=bounds();chaseScene={leader,follower,t:0,duration:4.2,x:leader.x,y:leader.y,followerRawX:follower.x,dir:leader.x>=follower.x?1:-1,history:[{t:0,x:leader.x,y:leader.y}]};
+ leader.restUntil=0;follower.restUntil=0;
  leader.nextMeeting=elapsed+28;follower.nextMeeting=elapsed+28;leader.el.dataset.state='chase';follower.el.dataset.state='chase';leader.el.classList.add('dashing');follower.el.classList.add('dashing');
  return true;
 }
@@ -223,7 +240,8 @@ function meeting(now){
   const young=a.member.id==='riela'?a:b.member.id==='riela'?b:null,other=young==a?b:a;
   if(young&&['loen','serian'].includes(other.member.id)&&Math.random()<.6&&startChase(other))return;
   const warm=a.member.id==='yuria'||b.member.id==='yuria'||young;
-  for(const p of [a,b]){p.action=warm?'heart':'wave';p.actionUntil=now+3000;p.nextMeeting=elapsed+22;p.el.dataset.meeting='true';p.meetingUntil=now+3000;react(p,p.action);p.el.style.setProperty('--meet-tilt',(p.x<(p===a?b.x:a.x)?'5':'-5')+'deg')}
+  const hug=warm&&Math.random()<.4;
+  for(const p of [a,b]){p.action=hug?'hug':warm?'heart':'wave';p.actionUntil=now+3000;p.nextMeeting=elapsed+22;p.lookDirection=p.x<(p===a?b.x:a.x)?1:-1;p.el.dataset.meeting='true';p.meetingUntil=now+3000;react(p,p.action);if(hug)setEmote(p,{loen:'이리 와, 꼬옥 🫂',yuria:'언니가 안아줄게 🫂',serian:'잠깐만. 꼬옥 🫂',riela:'언니, 꼬옥! 🫂'}[p.member.id]);}
   return;
  }
 }
@@ -237,7 +255,12 @@ function animate(now){
   if(p.gatherScene){advanceGather(p,dt,now,modalOpen);fitPetBubble(p);return;}
   if(p.visitScene&&!paused&&!modalOpen&&!p.drag)advanceVisit(p,dt);
   const chasing=chaseScene&&(chaseScene.leader===p||chaseScene.follower===p);
-  const held=p.visitScene||p.drag||p.hover||p.focus||selectedPet===p||p.action||modalOpen;
+  const previousX=p.x,previousY=p.y;
+  if(!p.nextRest)p.nextRest=elapsed+8+Math.random()*10;
+  if(!chasing&&!paused&&!modalOpen&&!p.visitScene&&!p.drag&&!p.hover&&!p.focus&&!p.action&&!p.dash&&elapsed>p.nextRest&&!blocked(p)){
+   p.restUntil=elapsed+2.7;p.restMood=Math.random()<.6?'think':'look';p.lookDirection=Math.random()<.5?-1:1;p.nextRest=elapsed+16+Math.random()*14;
+  }
+  const held=p.visitScene||p.drag||p.hover||p.focus||selectedPet===p||p.action||modalOpen||elapsed<(p.restUntil||0);
   if(!chasing&&!paused&&!held&&!p.dash&&elapsed>p.nextDash&&!pets.some(q=>q!==p&&q.dash)){startDash(p)}
   if(!chasing&&!paused&&!held&&p.dash){advanceDash(p,dt)}
   else if(!chasing&&!paused&&!held&&(!p.returnHold||elapsed>p.returnHold)){
@@ -254,8 +277,9 @@ function animate(now){
   if(paused&&!p.action)state=p.hover||p.focus||selectedPet===p?'hover':'idle';
   const frames=state==='sing'?[6,7]:state==='wave'||state==='hover'?[4,5]:state==='heart'?[4,5]:state==='idle'?[0]:p.dash||chasing?[1,3,2,3]:p.index===1?[1,3,2,3]:[0,1,0,2];
   const ix=paused?frames[0]:frames[Math.floor(elapsed*(state==='sing'?4:p.dash||chasing?10:8))%frames.length];
-  if(p.drag)draw(p,paused?0:Math.floor(elapsed*7)%4,'drag');
-  else if(chasing&&p.member.id==='riela'&&p.protesting)draw(p,Math.floor(elapsed*7)%4,'chase');
+  if(!p.drag&&p.poseReady)renderPetPose(p,{moving:Math.hypot(p.x-previousX,p.y-previousY)>.15,run:!!p.dash||!!chasing,facing:chasing?chaseScene.dir:Math.sign(p.x-previousX),talking:p.el.classList.contains('talking'),held:!!held,now});
+  else if(p.drag)draw(p,paused?0:Math.floor(elapsed*7)%4,'drag');
+  else if(chasing&&p.member.id==='riela')draw(p,paused?0:Math.floor(elapsed*7)%4,'chase',chaseScene.dir);
   else draw(p,ix);
   if(!paused&&!modalOpen&&!held&&elapsed-p.lastEmit>.3){emit(p,p.action);p.lastEmit=elapsed}
   fitPetBubble(p);
@@ -423,7 +447,7 @@ function visitSceneScheduler(now){
 // 자기 사진의 첫마디는 사용자 지정 문구. 그 외 대사는 성격별 연출 시안.
 const selfPortraitLines={loen:'나야!',riela:'저에요!',serian:'나야.',yuria:'나네.'};
 const reactionBank={
- loen:['여기서 만나니까 반갑네.','좋아, 같이 보고 가자.','리엘라, 이쪽에서도 보여.','서두르지 않아도 괜찮아.','우리 같이 서볼까?','네 표정, 잘 나왔는데?','다들 여기 있었구나.','자, 한 명씩 봐줄게.','오늘도 반짝이네.','네가 웃으니까 좋다.','이쪽 자리 비워둘게.','우리 다음 장면도 같이 가자.'],
+ loen:['여기서 만나니까 반갑네.','좋아, 같이 보고 가자.','리에라, 이쪽에서도 보여.','서두르지 않아도 괜찮아.','우리 같이 서볼까?','네 표정, 잘 나왔는데?','다들 여기 있었구나.','자, 한 명씩 봐줄게.','오늘도 반짝이네.','네가 웃으니까 좋다.','이쪽 자리 비워둘게.','우리 다음 장면도 같이 가자.'],
  yuria:['어, 여기 다 모였네!','잠깐, 나도 볼래!','이쪽에서 보면 더 잘 보여!','우리 막내 찾았다!','나랑 같이 구경하자!','여기서 사진 찍을까?','이 장면 마음에 드는데?','한 바퀴 더 돌고 올까?','좋아, 다음은 어디야?','내가 먼저 가서 볼게!','어때, 꽤 근사하지?','다들 이쪽으로 와봐!'],
  serian:['잘 나왔네.','그 자리 괜찮네.','조금만 옆으로.','여기서 보면 되겠네.','응, 보고 있어.','잠깐 쉬어도 되겠어.','이 장면은 기억해둘게.','같이 보니까 좋네.','먼저 보고 있어.','그쪽 빛이 괜찮아.','괜찮아. 천천히 봐.','나도 여기 있을게.'],
  riela:['언니, 이것 좀 보세요!','저도 같이 볼래요.','여기 별 하나 놓을까요?','이쪽에도 자리 있어요!','제 사진 찾으셨어요?','같이 있으니까 좋네요.','언니도 잘 나왔어요!','조금만 더 보고 가요.','별들도 구경하고 싶대요.','여기, 반짝이는 거 보세요!','이번엔 제가 먼저 찾았어요.','그럼 다음은 제가 안내할게요!']
@@ -437,7 +461,7 @@ function variedReaction(p,target,slot,count,used){
  let bank=[...reactionBank[key],positional,groupLine].filter(Boolean);
  if(targetId!==p.member.id)bank=bank.filter(t=>!t.includes('제 사진'));
  // 관계에 맞지 않는 호칭은 그 장면에서 제외한다.
- if(!['riela'].includes(targetId))bank=bank.filter(t=>!t.includes('막내')&&!t.startsWith('리엘라,'));
+ if(!['riela'].includes(targetId))bank=bank.filter(t=>!t.includes('막내')&&!t.startsWith('리에라,'));
  let options=bank.filter(t=>!used.has(t)&&!history.includes(t));
  if(!options.length){history=history.slice(-3);options=bank.filter(t=>!used.has(t)&&!history.includes(t))}
  const text=options[Math.floor(Math.random()*options.length)]||positional;
@@ -493,6 +517,7 @@ const resonanceLayers=new Set();
 const powerMotionTimers=new Map();
 function activateResonance(member,anchor=null,source='hover'){
  if(motionQuery.matches)return;
+ if(source!=='card_preview'){const pet=pets.find(p=>p.member.id===member.id);if(pet)emitAbility(pet,'burst');}
  if(source!=='card_preview')window.HavenAmbient?.interact(member.id,source);
  clearTimeout(resonanceTimer);
  document.body.dataset.resonance=member.id;document.documentElement.style.setProperty('--resonance-color',member.color);
@@ -577,6 +602,76 @@ const profileCopy=document.querySelector('.profile-copy');
 if(profileCopy){
  const observer=new MutationObserver(()=>profileCopy.querySelectorAll('h2,.ko-name').forEach(el=>{addTypeLight(el);el.dataset.typeLight=el.innerText||el.textContent}));
  observer.observe(profileCopy,{childList:true,subtree:true,characterData:true});
+}
+
+// 포즈는 상황별로 유지하고, 대화 중에는 같은 팔 자세에서 입만 바뀐다.
+function renderPetPose(p,{moving=false,run=false,facing=0,talking=false,held=false,now=performance.now()}={}){
+ if(!p.poseReady)return;
+ if(facing)p.facing=facing;
+ let kind='idle';
+ if(paused)kind='idle';
+ else if(run&&!held)kind='run';
+ else if(moving&&!held)kind='walk';
+ else if(talking)kind='talk';
+ else if(p.action==='sing')kind='sing';
+ else if(p.action==='heart')kind='heart';
+ else if(p.action==='hug')kind='hug';
+ else if(p.action==='wave')kind='greet';
+ else if(p.hover||p.focus||selectedPet===p)kind='look';
+ else if(p.visitScene||p.gatherScene)kind='listen';
+ else if(elapsed<(p.restUntil||0))kind=p.restMood;
+ else{
+  if(!p.nextIdlePose)p.nextIdlePose=now+2200+Math.random()*3000;
+  if(now>p.nextIdlePose){p.idleExpression=Math.random()<.45?'think':'look';p.idleExpressionUntil=now+1400+Math.random()*800;p.nextIdlePose=now+5500+Math.random()*4500;p.lookDirection=Math.random()<.5?-1:1;}
+  if(now<(p.idleExpressionUntil||0))kind=p.idleExpression;
+ }
+ if(p.poseKind!==kind){p.poseKind=kind;p.poseSince=now;p.el.dataset.pose=kind;
+  if(kind!=='idle'&&kind!=='walk'&&!(kind==='look'&&(p.hover||p.focus||selectedPet===p)))showPetReaction(p,kind);
+  if(kind==='listen'&&p.visitScene?.target){const r=p.visitScene.target.getBoundingClientRect();p.lookDirection=r.left+r.width/2>p.x+bounds().size/2?1:-1;}
+ }
+ const t=(now-p.poseSince)/1000;
+ let frame=0;
+ if(kind==='walk')frame=8+Math.floor(elapsed*5.5)%4;
+ else if(kind==='run')frame=12+Math.floor(elapsed*10)%4;
+ else if(kind==='talk')frame=[4,4,5,5,4,5,4,4][Math.floor(t*5)%8];
+ else if(kind==='think')frame=3;
+ else if(kind==='look'||kind==='listen')frame=(p.lookDirection||p.facing||1)>0?2:1;
+ else if(kind==='greet')frame=t<.12||t>1.3?0:6;
+ else if(kind==='heart')frame=t<.12||t>1.8?0:7;
+ else if(kind==='hug')frame=t<.35||t>2.2?(p.lookDirection>0?2:1):7;
+ else if(kind==='sing'){draw(p,t>.8&&t<1.2?7:6);return;}
+ draw(p,frame,'pose',kind==='walk'||kind==='run'?p.facing||-1:0);
+}
+pets.forEach(p=>p.trigger.addEventListener('pointermove',e=>{p.lookDirection=e.clientX<p.x+bounds().size/2?-1:1;},{passive:true}));
+
+function showPetReaction(p,state){
+ if(!p.reactionIcon)return;
+ const icons={hover:{loen:'☺️ ✨',yuria:'👋 💧',serian:'👀',riela:'😉 💫'}[p.member.id],look:'👀',think:'💭',listen:'👂',talk:'💬',wave:'👋',greet:'👋',heart:'💕',hug:'🫂',sing:'🎵',run:'💨',drag:'😳'};
+ const text=icons[state];if(!text)return;
+ clearTimeout(p.reactionTimer);p.reactionIcon.textContent=text;p.el.dataset.reaction=state;p.el.classList.add('has-reaction');
+ p.reactionTimer=setTimeout(()=>{p.el.classList.remove('has-reaction');delete p.el.dataset.reaction;},state==='hover'?2400:1900);
+}
+
+// 멤버의 능력을 알아볼 수 있는 곡선·물결·별·부유 물체로 표현한다.
+const petAbilityShapes={
+ loen:'<path class="ability-stream stream-one" d="M10 127 Q65 20 174 61"/><path class="ability-stream stream-two" d="M17 140 Q96 42 178 94"/><path class="ability-core" d="M10 127 Q65 20 174 61"/><path class="ability-glint glint-one" d="M127 30v30m-15-15h30m-25-10 20 20m0-20-20 20"/><path class="ability-glint glint-two" d="M55 82v18m-9-9h18"/>',
+ yuria:'<path class="water-body" d="M10 135 Q46 77 91 112 Q139 150 173 66 Q164 147 106 147 Q48 111 10 135Z"/><path class="water-crest" d="M10 135 Q46 77 91 112 Q139 150 173 66"/><ellipse class="water-ripple" cx="92" cy="157" rx="51" ry="9"/><path class="water-bead bead-one" d="M46 47Q29 70 46 76Q63 70 46 47Z"/><path class="water-bead bead-two" d="M144 27Q130 48 144 52Q158 48 144 27Z"/>',
+ serian:'<path class="telekinetic-thread" d="M22 129 Q26 65 65 48 M108 135Q159 124 158 64"/><g class="floating-stone stone-one"><path d="m45 48 16-9 16 9v22l-16 9-16-9Z"/><path class="stone-facet" d="m45 48 16 10 16-10m-16 10v21"/></g><g class="floating-stone stone-two"><path d="m128 91 12-7 12 7v17l-12 7-12-7Z"/><path class="stone-facet" d="m128 91 12 7 12-7m-12 7v17"/></g><path class="telekinetic-thread thread-two" d="M61 82Q93 132 140 114"/>',
+ riela:'<path class="star-path" d="M17 130 Q38 52 91 70 T172 33"/><g class="free-star star-one"><path d="m44 42 5 11 12 1-9 8 3 12-11-6-10 6 2-12-9-8 13-1Z"/></g><g class="free-star star-two"><path d="m118 91 4 9 11 1-8 7 2 11-9-6-10 6 3-11-8-7 10-1Z"/></g><g class="free-star star-three"><path d="m153 27 3 7 8 1-6 5 1 8-6-4-7 4 2-8-6-5 8-1Z"/></g><path class="star-twinkle" d="M79 26v15m-7-7h14M37 118v12m-6-6h12"/>'
+};
+function emitAbility(p,kind='trail'){
+ if(paused||motionQuery.matches||!p.present||document.hidden)return;
+ const burst=kind==='burst',now=performance.now();
+ if(now<(burst?p.nextAbilityBurst||0:p.nextAbilityTrace||0))return;
+ if(burst)p.nextAbilityBurst=now+900;else p.nextAbilityTrace=now+620;
+ const existing=[...trailLayer.querySelectorAll('.pet-ability-fx')];if(existing.length>=18)existing[0].remove();
+ const fx=document.createElement('span');fx.className='pet-ability-fx ability-'+p.member.id+(burst?' ability-burst':'');fx.setAttribute('aria-hidden','true');
+ const size=burst?188:104,body=bounds().size;
+ fx.style.left=Math.max(-size*.3,Math.min(innerWidth-size*.7,p.x+body/2-size/2))+'px';
+ fx.style.top=Math.max(15,Math.min(innerHeight-size*.5,p.y+body*.55-size*.6))+'px';
+ fx.style.setProperty('--ability-size',size+'px');fx.style.setProperty('--ability-tone',p.member.id==='loen'?'#ffc5ae':p.member.color);
+ fx.innerHTML='<svg viewBox="0 0 190 190" aria-hidden="true">'+petAbilityShapes[p.member.id]+'</svg>';
+ trailLayer.append(fx);fx.addEventListener('animationend',e=>{if(e.target===fx)fx.remove()});setTimeout(()=>fx.remove(),2700);
 }
 
 // 원화 네 장과 기존 단체 무대 이미지의 전환. 캐릭터 보행을 흉내 내지 않는다.
@@ -801,7 +896,7 @@ function gatherPets(){
  });
  gatherDeadline=performance.now()+12500;gatherButton.setAttribute('aria-pressed','true');
  const label=gatherButton.querySelector('.gather-label');label.textContent='다시 산책';label.dataset.typeLight=label.textContent;
- announce('로엔, 유리아, 세리안, 리엘라가 오른쪽 아래로 모입니다.');eventLog('haven_character_gather',{interaction_type:'gather',member_count:4});
+ announce('로엔, 유리아, 세린, 리에라가 오른쪽 아래로 모입니다.');eventLog('haven_character_gather',{interaction_type:'gather',member_count:4});
 }
 function advanceGather(p,dt,now,modalOpen){
  const scene=p.gatherScene;if(!scene)return;
@@ -814,11 +909,12 @@ function advanceGather(p,dt,now,modalOpen){
  p.el.style.transform=`translate(${Math.round(p.x)}px,${Math.round(p.y)}px)`;
  p.el.style.opacity='1';p.el.style.pointerEvents='';
  if(progress===1&&!scene.arrived){
-  scene.arrived=true;p.el.classList.remove('gathering');p.el.classList.add('gathered');p.el.dataset.state='wave';
+  scene.arrived=true;p.lookDirection=scene.slot<(innerWidth<600?1:2)?1:-1;p.el.classList.remove('gathering');p.el.classList.add('gathered');p.el.dataset.state='wave';
   const bank=gatherLines[p.member.id];setEmote(p,bank[(gatherRound-1)%bank.length]);
  }
  p.el.classList.toggle('gather-speaking',scene.arrived&&Math.floor(Math.max(0,scene.t-1.5)/2.1)%4===scene.slot);
- draw(p,paused?0:progress<1?[0,1,0,2][Math.floor(elapsed*9)%4]:[4,5][Math.floor(elapsed*3)%2]);
+ if(p.poseReady)renderPetPose(p,{moving:progress<1,run:false,facing:Math.sign(target.x-scene.from.x),talking:p.el.classList.contains('gather-speaking'),held:progress===1,now});
+ else draw(p,paused?0:progress<1?[0,1,0,2][Math.floor(elapsed*9)%4]:4);
 }
 gatherButton?.addEventListener('click',gatherPets);
 addEventListener('resize',()=>pets.forEach(p=>{if(p.gatherScene){p.gatherScene.from={x:p.x,y:p.y};p.gatherScene.t=0;}}));

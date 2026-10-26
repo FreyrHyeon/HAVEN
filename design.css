@@ -598,5 +598,44 @@ html.page-transition-active .hero-logo,html.page-transition-active .banner-light
 @keyframes banner-terminal-glint{0%,77%,100%{opacity:0;transform:scale(.25) rotate(0)}82%{opacity:.9;transform:scale(1) rotate(20deg)}86%{opacity:.35;transform:scale(.6) rotate(35deg)}91%{opacity:.85;transform:scale(.8) rotate(45deg)}97%{opacity:0;transform:scale(.2) rotate(65deg)}}
 @media(max-width:800px){.section-jump a{padding-inline:8px}.jump-index{font-size:10px}.banner-end-glint{width:17px;height:17px;margin:-8.5px}.hero-actions{margin-top:22px}}
 @media(prefers-reduced-motion:reduce){.banner-light-pass,.banner-terminals{display:none!important}.nav-arrow-icon{transition:none;transform:none!important}}
+.pet[data-pose] canvas{animation:none;rotate:0deg;translate:0 0;transform-origin:50% 90%}
+.pet.landing[data-pose] canvas{animation:little-land .43s ease-out}
+.pet[data-meeting=true][data-pose] canvas{rotate:0deg}
+.pet.dragging[data-pose] canvas{rotate:var(--drag-tilt,0deg);translate:0 -7px;animation:little-dangle .6s steps(2) infinite}
+.pet-reaction-icon{position:absolute;right:-3px;top:7px;z-index:4;min-width:24px;line-height:1.2;font:20px/1.2 'Segoe UI Emoji','Apple Color Emoji','Noto Color Emoji',sans-serif;white-space:nowrap;pointer-events:none;opacity:0;translate:0 5px;scale:.9;transition:opacity .18s,translate .25s,scale .25s;filter:drop-shadow(0 2px 3px #0008)}
+.pet.has-reaction .pet-reaction-icon{opacity:1;translate:0 0;scale:1}
+.pet[data-state=hug] .emote{opacity:1}
+@media(prefers-reduced-motion:reduce){.pet-reaction-icon{transition:none}}
+.pet-ability-fx{position:fixed;width:var(--ability-size);height:var(--ability-size);pointer-events:none;color:var(--ability-tone);opacity:0;animation:ability-arrive 1.65s cubic-bezier(.2,.65,.2,1) forwards;filter:drop-shadow(0 0 4px color-mix(in srgb,var(--ability-tone) 60%,transparent))}
+.pet-ability-fx.ability-burst{animation-duration:2.6s;filter:drop-shadow(0 0 6px color-mix(in srgb,var(--ability-tone) 75%,transparent))}
+.pet-ability-fx svg{width:100%;height:100%;overflow:visible;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+@keyframes ability-arrive{0%{opacity:0;scale:.84}15%{opacity:.86;scale:1}75%{opacity:.72}100%{opacity:0;scale:1.08;translate:0 -9px}}
+.ability-stream{stroke-width:6;stroke-dasharray:115 230;animation:ability-light-run 1.4s ease-out both}
+.stream-two{stroke:#f69bba;stroke-width:3;animation-delay:.16s}
+.ability-core{stroke:#fff8e9;stroke-width:1.5;stroke-dasharray:110 230;animation:ability-light-run 1.4s ease-out both}
+.ability-glint{stroke:#fff6e4;stroke-width:1.5;transform-box:fill-box;transform-origin:center;animation:ability-spark 1.3s ease-in-out both}
+.glint-two{animation-delay:.4s}
+@keyframes ability-light-run{from{stroke-dashoffset:155;opacity:0}20%{opacity:1}to{stroke-dashoffset:-180;opacity:.35}}
+@keyframes ability-spark{0%,100%{scale:.2;opacity:0}35%,65%{scale:1;opacity:1}}
+.water-body{fill:#74d5eb60;stroke:#baf4ff;stroke-width:1;transform-origin:50% 80%;animation:ability-wave 1.8s ease-in-out both}
+.water-crest{stroke:#e6fdff;stroke-width:2.5;stroke-dasharray:110 200;animation:ability-light-run 1.8s ease-out both}
+.water-ripple{stroke:#baf4ff;stroke-width:1.4;transform-box:fill-box;transform-origin:center;animation:ability-ripple 1.6s ease-out both}
+.water-bead{fill:#adf1ffb0;stroke:#e1fcff;stroke-width:1;animation:ability-droplet 1.6s ease-in-out both}
+.bead-two{animation-delay:.2s}
+@keyframes ability-wave{0%{scale:.8 .55;translate:0 12px}50%{scale:1.04 1.08}100%{scale:1.12 .8;translate:0 -4px}}
+@keyframes ability-ripple{from{scale:.25 .6;opacity:.95}to{scale:1.3 1.05;opacity:0}}
+@keyframes ability-droplet{0%{translate:0 14px;opacity:0}30%{opacity:1}100%{translate:0 -22px;opacity:0}}
+.telekinetic-thread{stroke:#e7b7e5;stroke-width:1.3;stroke-dasharray:60 90;animation:ability-light-run 2s ease-in-out both}
+.floating-stone{fill:#9f769ac0;stroke:#f8d2e8;stroke-width:1.8;transform-box:fill-box;transform-origin:center;animation:ability-levitate 2.4s ease-in-out both}
+.stone-facet{fill:none;stroke:#f5c7e4;stroke-width:1}
+.stone-two{animation-delay:.22s;fill:#c7a0b380}
+@keyframes ability-levitate{0%{translate:0 16px;rotate:-8deg}45%{translate:0 -9px;rotate:6deg}100%{translate:0 -17px;rotate:-3deg}}
+.star-path{stroke:#cdeafa80;stroke-width:1;stroke-dasharray:3 12;animation:ability-light-run 2.4s ease-out both}
+.free-star{stroke:#fff6de;stroke-width:1.2;fill:#ffd892;transform-box:fill-box;transform-origin:center;animation:ability-star-roam 2.4s ease-in-out both}
+.star-two{fill:#c8b4f4;stroke:#f4eaff;animation-delay:.2s;animation-direction:reverse}
+.star-three{fill:#a6e4ef;stroke:#f0feff;animation-delay:.4s}
+.star-twinkle{stroke:#fff4dc;stroke-width:1.6;animation:ability-spark 2s ease-in-out both}
+@keyframes ability-star-roam{0%{translate:-5px 14px;rotate:-16deg;scale:.7}50%{translate:9px -7px;rotate:12deg;scale:1.08}100%{translate:-1px -21px;rotate:28deg;scale:.85}}
+@media(prefers-reduced-motion:reduce){.pet-ability-fx{display:none!important}}
 
 .btn,.member-card{border-radius:var(--radius,3px)}.hero-tagline{color:var(--paper)}body[data-theme=impact] .section-heading h2,body[data-theme=signal] .section-heading h2{font-family:Arial,sans-serif;font-weight:800;font-style:normal;letter-spacing:-.07em}body[data-theme=impact] .hero-center{transform:skewY(-2deg)}body[data-theme=pulse] .member-card,body[data-theme=flow] .member-card{border-radius:100px 100px 4px 4px}body[data-theme=signature] .hero-tagline{letter-spacing:.12em;font-weight:300}body[data-theme=beam] .orbit{border-radius:0;height:170px;transform:rotate(-11deg)}body[data-theme=core] .ambient:after{opacity:.3}body[data-theme=signal] .hero-logo{max-width:660px;max-height:360px;object-fit:contain}body[data-theme=signal] .hero-center{padding:10px 0}body[data-theme=signal] .btn.primary{background:var(--cyan);border-color:var(--cyan)}body[data-theme=pulse] .section-heading h2,body[data-theme=flow] .section-heading h2{font-family:Arial,sans-serif;font-weight:300;letter-spacing:-.07em}
