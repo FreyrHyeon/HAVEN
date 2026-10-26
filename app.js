@@ -6,7 +6,7 @@ window.HavenMountPage=()=>{
  havenPageMounts.forEach(mount=>{const dispose=mount();if(typeof dispose==='function')havenPageCleanups.push(dispose);});
  document.dispatchEvent(new CustomEvent('haven:page-mounted'));
 };
-window.HavenBeforePageSwap=()=>{document.querySelectorAll('dialog[open]').forEach(dialog=>dialog.close());closePet();stopChase();pets.forEach(cancelVisit);trailLayer.replaceChildren();nextVisit=elapsed+2;};
+window.HavenBeforePageSwap=()=>{stopAbilityInteraction('navigation');document.querySelectorAll('dialog[open]').forEach(dialog=>dialog.close());closePet();stopChase();pets.forEach(cancelVisit);trailLayer.replaceChildren();nextVisit=elapsed+2;};
 
 'use strict';
 const members = window.HAVEN_MEMBERS;
@@ -90,7 +90,7 @@ function installDrag(p){
   if(!p.drag&&Math.hypot(e.clientX-d.startX,e.clientY-d.startY)>5){
    if(p.gatherScene)releaseGatherPet(p);
    closePet();cancelVisit(p);if(chaseScene&&(chaseScene.leader===p||chaseScene.follower===p))stopChase();
-   p.dash=null;p.el.classList.remove('dashing');p.action=null;p.drag=true;p.el.dataset.state='drag';p.el.classList.add('dragging');p.el.style.opacity='1';p.el.style.pointerEvents='';setEmote(p,'!');
+   p.dash=null;p.el.classList.remove('dashing');stopAbilityInteraction('drag');p.action=null;p.drag=true;p.el.dataset.state='drag';p.el.classList.add('dragging');p.el.style.opacity='1';p.el.style.pointerEvents='';setEmote(p,'!');
    eventLog('haven_character_drag_start',{member_id:p.member.id});
   }
   if(!p.drag)return;e.preventDefault();
@@ -160,7 +160,7 @@ addEventListener('scroll',()=>{blockerStamp=-1;scrollingUntil=performance.now()+
 addEventListener('resize',()=>{blockerStamp=-1});
 function emit(p,kind){return emitAbility(p,kind);}
 function startDash(p){
- if(paused||p.gatherScene)return false;
+ if(paused||p.gatherScene||p.abilityScene)return false;
  const {w,h,size}=bounds();
  p.restUntil=0;
  const exitRight=p.index%2===0;
@@ -207,7 +207,7 @@ function advanceDash(p,dt){
  }
  if(d.departOnly&&d.phase===1){p.present=false;p.el.dataset.present='false';p.dash=null;p.el.classList.remove('dashing')}
 }
-function available(p){return p.present&&!p.gatherScene&&!p.visitScene&&!p.drag&&!p.hover&&!p.focus&&!p.action&&!p.dash&&selectedPet!==p&&elapsed>p.nextMeeting}
+function available(p){return p.present&&!p.abilityScene&&!p.gatherScene&&!p.visitScene&&!p.drag&&!p.hover&&!p.focus&&!p.action&&!p.dash&&selectedPet!==p&&elapsed>p.nextMeeting}
 function stopChase(){if(!chaseScene)return;for(const p of [chaseScene.leader,chaseScene.follower]){p.protesting=false;p.el.classList.remove('protesting','chase-answer','dashing');p.resumeFrom={x:p.x,y:p.y,at:elapsed};react(p,'walk')}chaseScene=null}
 function startChase(follower){
  const leader=pets.find(p=>p.member.id==='riela');if(paused||!leader||!available(leader)||!available(follower))return false;
@@ -258,6 +258,7 @@ function animate(now){
  if(!paused&&!modalOpen)advanceChase(dt);
  pets.forEach(p=>{
   if(!p.present)return;
+  if(p.abilityScene&&advanceAbilityInteraction(p,now,modalOpen))return;
   if(p.gatherScene){advanceGather(p,dt,now,modalOpen);fitPetBubble(p);return;}
   if(p.visitScene&&!paused&&!modalOpen&&!p.drag)advanceVisit(p,dt);
   const chasing=chaseScene&&(chaseScene.leader===p||chaseScene.follower===p);
@@ -290,7 +291,7 @@ function animate(now){
   if(!paused&&!modalOpen&&!held&&elapsed-p.lastEmit>.3){emit(p,p.action);p.lastEmit=elapsed}
   fitPetBubble(p);
  });
- if(!paused&&!modalOpen)visitSceneScheduler(now);
+ if(!paused&&!modalOpen){abilityInteractionScheduler(now);visitSceneScheduler(now);}
  meeting(now);
  frameRequest=requestAnimationFrame(animate);
 }
@@ -411,6 +412,7 @@ function cancelVisit(p){
 }
 function startVisit(p,target,options={}){
  if(paused||!p.present||p.drag)return false;
+ if(p.abilityScene)stopAbilityInteraction('visit');
  const r=target.getBoundingClientRect(),{size,h}=bounds();
  if(r.bottom<80||r.top>h-80)return false;
  cancelVisit(p);if(chaseScene&&(chaseScene.leader===p||chaseScene.follower===p))stopChase();
@@ -630,6 +632,7 @@ function renderPetPose(p,{moving=false,run=false,facing=0,talking=false,held=fal
  const travelDirection=p.facing>0?'right':'left';if(p.el.dataset.travelDirection!==travelDirection)p.el.dataset.travelDirection=travelDirection;
  let kind='idle';
  if(paused)kind='idle';
+ else if(p.abilityScene)kind=p.abilityScene.pose;
  else if(run&&!held)kind='run';
  else if((moving||now<(p.walkingUntil||0))&&!held)kind='walk';
  else if(talking)kind='talk';
@@ -715,6 +718,149 @@ function emitAbility(p,kind='trail'){
  const remove=()=>{fx.remove();activeAbilityEffects.delete(fx);};
  trailLayer.append(fx);activeAbilityEffects.add(fx);fx.addEventListener('animationend',e=>{if(e.target===fx)remove()});setTimeout(remove,burst?2400:1400);
 }
+
+// 능력·동반자와 주고받는 32개 짧은 장면. 기존 RAF를 공유하고 한 장면만 재생한다.
+// 좌표는 각 동반자의 기본 위치에 대한 이동량이며 마지막에 기본 위치로 돌아온다.
+const abilityInteractionBank={
+ loen:[
+  {id:'light-fetch',name:'빛 구슬 가져오기',line:'잡았어? 잘했어.',poses:['look','greet','heart'],fx:'orb',tracks:[[[0,0],[38,-26],[63,-8],[32,-33],[0,0]]]},
+  {id:'halo-hop',name:'빛 고리 넘기',line:'하나 더 넘어볼까?',poses:['think','greet','look'],fx:'hoops',tracks:[[[0,0],[18,-48],[40,0],[62,-42],[0,0]]]},
+  {id:'paw-five',name:'앞발 하이파이브',line:'좋아, 손!',poses:['greet','heart','greet'],fx:'contact',tracks:[[[0,0],[40,-20,-12],[46,-35,8],[40,-20,-12],[0,0]]]},
+  {id:'light-bridge',name:'빛 다리 달리기',line:'이쪽 길로 와.',poses:['look','greet','look'],fx:'bridge',tracks:[[[0,0],[-18,-8],[15,-22],[57,-13],[70,2],[0,0]]]},
+  {id:'light-hide',name:'빛 뒤 숨바꼭질',line:'거기 숨어 있었네?',poses:['think','look','heart'],fx:'veil',tracks:[[[0,0],[34,-4,0,.65],[54,-8,0,.1],[76,-13,0,1],[0,0]]]},
+  {id:'warm-nuzzle',name:'로즈빛 어깨 부비기',line:'응, 나도 좋아.',poses:['look','heart','heart'],fx:'warmth',tracks:[[[0,0],[36,-35,-12],[41,-33,8],[37,-36,-8],[41,-33,6],[0,0]]]},
+  {id:'mirror-bow',name:'서로 고개 인사',line:'우리 인사할까?',poses:['greet','look','greet'],fx:'ribbon',tracks:[[[0,0],[18,-4],[22,1,16],[22,-4,-5],[22,1,16],[0,0]]]},
+  {id:'light-nest',name:'빛 둥지에서 쉬기',line:'잠깐 쉬어도 돼.',poses:['think','listen','heart'],fx:'nest',tracks:[[[0,0],[24,6],[31,11,-12,.95],[31,11,-12,.95],[22,6],[0,0]]]}
+ ],
+ yuria:[
+  {id:'guardian-screen',name:'첫째의 물방울 보호막',line:'괜찮아, 여기 있어.',poses:['look','greet','heart'],fx:'shield',tracks:[[[0,0],[38,-25],[70,5],[42,15],[0,0]],[[0,0],[8,5],[14,1],[0,0]],[[0,0],[-3,6],[-8,0],[0,0]]]},
+  {id:'puddle-hop',name:'형제들의 물방울 징검다리',line:'천천히, 순서대로!',poses:['think','look','greet'],fx:'steps',tracks:[[[0,0],[8,-5],[0,0]],[[0,0],[22,-28],[48,0],[66,-25],[0,0]],[[0,0],[-8,0],[15,-28],[40,0],[60,-25],[0,0]]]},
+  {id:'bird-assembly',name:'손짓에 모여드는 새들',line:'자, 다들 이리 와!',poses:['greet','look','heart'],fx:'gather',tracks:[[[0,0],[-28,-12],[32,-7],[0,0]],[[0,0],[-30,12],[24,-33],[0,0]],[[0,0],[55,8],[27,-30],[0,0]]]},
+  {id:'sibling-peace',name:'투닥거리는 둘째와 셋째 말리기',line:'둘 다, 사이좋게!',poses:['think','greet','look'],fx:'splash',tracks:[[[0,0],[37,24],[42,13],[0,0]],[[0,0],[20,-6],[28,-1],[9,-17],[0,0]],[[0,0],[-10,-7],[-17,-1],[5,-18],[0,0]]]},
+  {id:'water-weave',name:'물 고리 사이로 비행',line:'잘한다, 한 번 더!',poses:['look','greet','heart'],fx:'water-ring',tracks:[[[0,0],[28,-27],[64,5],[27,11],[0,0]],[[0,0],[6,-18],[46,-50],[70,-18],[0,0]],[[0,0],[-4,-10],[24,-48],[55,-25],[0,0]]]},
+  {id:'shoulder-perch',name:'세 형제 어깨에 앉기',line:'어휴, 다 올라왔네!',poses:['look','listen','heart'],fx:'perch',tracks:[[[0,0],[27,-16],[34,-7],[34,-7],[0,0]],[[0,0],[24,-45],[32,-37],[32,-37],[0,0]],[[0,0],[42,-48],[49,-36],[49,-36],[0,0]]]},
+  {id:'raindrop-catch',name:'떨어지는 물방울 받아내기',line:'받아볼래? 간다!',poses:['greet','look','greet'],fx:'rain',tracks:[[[0,0],[30,-37],[44,-26],[0,0]],[[0,0],[3,-35],[-15,-51],[6,-29],[0,0]],[[0,0],[42,-32],[62,-45],[32,-20],[0,0]]]},
+  {id:'wave-slide',name:'물결 미끄럼 타기',line:'좋아, 쭉 미끄러져!',poses:['greet','look','heart'],fx:'wave',tracks:[[[0,0],[4,-15],[8,2],[0,0]],[[0,0],[-10,-25],[24,-17],[63,7],[0,0]],[[0,0],[-30,-30],[5,-19],[44,8],[0,0]]]}
+ ],
+ serian:[
+  {id:'gentle-lift',name:'두 고양이 살짝 띄우기',line:'조금만 올라가자.',poses:['think','greet','look'],fx:'lift',tracks:[[[0,0],[4,-26],[4,-34],[0,0]],[[0,0],[-4,-20],[-4,-29],[0,0]]]},
+  {id:'orbit-swap',name:'흰 고양이 검은 고양이 자리 교환',line:'이번엔 자리 바꾸기.',poses:['look','think','greet'],fx:'orbit',tracks:[[[0,0],[35,-34],[83,19],[38,37],[0,0]],[[0,0],[-35,24],[-83,-19],[-38,-40],[0,0]]]},
+  {id:'paw-turns',name:'번갈아 앞발 맞대기',line:'너 먼저. 다음은 너.',poses:['greet','look','greet'],fx:'double-touch',tracks:[[[0,0],[38,-17,-12],[40,-23,8],[0,0],[0,0]],[[0,0],[0,0],[-28,-30,10],[-31,-36,-8],[0,0]]]},
+  {id:'floating-nap',name:'공중 낮잠 받쳐주기',line:'졸려? 이대로 있어.',poses:['think','listen','heart'],fx:'cushion',tracks:[[[0,0],[17,-15,-14],[21,-18,-24],[21,-18,-24],[0,0]],[[0,0],[-17,-20,14],[-21,-23,24],[-21,-23,24],[0,0]]]},
+  {id:'ribbon-chase',name:'염동력 끈 따라잡기',line:'잡을 수 있겠어?',poses:['look','think','look'],fx:'thread',tracks:[[[0,0],[17,-27],[44,-12],[20,5],[0,0]],[[0,0],[-7,12],[-42,-12],[-22,-38],[0,0]]]},
+  {id:'cat-balance',name:'고양이 시소 균형',line:'무게는 똑같은데.',poses:['think','look','think'],fx:'balance',tracks:[[[0,0],[8,-24],[8,12],[8,-24],[0,0]],[[0,0],[-8,12],[-8,-24],[-8,12],[0,0]]]},
+  {id:'double-nuzzle',name:'양쪽에서 다가와 부비기',line:'…둘 다 이리 와.',poses:['look','heart','heart'],fx:'embrace',tracks:[[[0,0],[35,-5],[39,-9,9],[35,-7,-5],[0,0]],[[0,0],[-26,-24],[-30,-28,-9],[-26,-26,5],[0,0]]]},
+  {id:'figure-eight',name:'서로 엇갈리는 팔자 비행',line:'이번엔 부딪히지 말고.',poses:['greet','look','greet'],fx:'eight',tracks:[[[0,0],[36,-31],[80,-5],[40,20],[0,0]],[[0,0],[-35,14],[-80,-34],[-40,-47],[0,0]]]}
+ ],
+ riela:[
+  {id:'star-tag',name:'제멋대로 별 술래잡기',line:'잠깐, 같이 가요!',poses:['look','greet','look'],fx:'comet',tracks:[[[0,0],[38,-23],[70,14],[0,0]],[[0,0],[-15,-38],[-62,6],[0,0]],[[0,0],[38,-14],[-20,-44],[0,0]]]},
+  {id:'constellation',name:'손끝에 별자리 만들기',line:'여기, 하나만 더요.',poses:['think','greet','heart'],fx:'constellation',tracks:[[[0,0],[21,-20],[31,-15],[0,0]],[[0,0],[-18,-28],[-9,-33],[0,0]],[[0,0],[15,-43],[26,-39],[0,0]]]},
+  {id:'star-crown',name:'별들이 씌워주는 왕관',line:'저한테 주는 거예요?',poses:['look','heart','greet'],fx:'crown',tracks:[[[0,0],[24,-45],[31,-39],[0,0]],[[0,0],[-14,-68],[-10,-64],[0,0]],[[0,0],[28,-94],[25,-88],[0,0]]]},
+  {id:'shy-star',name:'뒤에 숨은 별 달래기',line:'괜찮아요, 나와 봐요.',poses:['think','look','heart'],fx:'peek',tracks:[[[0,0],[30,10,0,.25],[40,10,0,.25],[10,-4,0,1],[0,0]],[[0,0],[-5,-8],[-3,-8],[0,0]],[[0,0],[13,-9],[9,-9],[0,0]]]},
+  {id:'star-high-five',name:'별 하나씩 손 맞대기',line:'하나, 둘, 셋!',poses:['greet','greet','heart'],fx:'triple-touch',tracks:[[[0,0],[42,-5],[42,-15],[0,0],[0,0]],[[0,0],[0,0],[-12,-36],[-12,-42],[0,0]],[[0,0],[0,0],[16,-53],[22,-58],[0,0]]]},
+  {id:'star-tug',name:'서로 다른 방향으로 끌기',line:'얘들아, 한쪽씩요!',poses:['look','think','greet'],fx:'tug',tracks:[[[0,0],[-18,-12],[-25,-3],[0,0]],[[0,0],[22,-14],[29,-4],[0,0]],[[0,0],[14,-36],[8,-47],[0,0]]]},
+  {id:'star-reunion',name:'흩어졌다 품으로 모이기',line:'다시 와줘서 고마워요.',poses:['greet','look','heart'],fx:'reunion',tracks:[[[0,0],[-24,-24],[35,10],[38,8],[0,0]],[[0,0],[27,-34],[-28,-13],[-24,-11],[0,0]],[[0,0],[5,18],[15,-35],[19,-33],[0,0]]]},
+  {id:'starlit-bow',name:'별빛 커튼 아래 함께 인사',line:'같이 인사할까요?',poses:['look','greet','heart'],fx:'curtain',tracks:[[[0,0],[7,-31],[7,-23,14],[0,0]],[[0,0],[3,-52],[3,-43,-14],[0,0]],[[0,0],[20,-79],[20,-70,12],[0,0]]]}
+ ]
+};
+let activeAbilityInteraction=null,nextAbilityInteraction=0;
+const interactionPaths={
+ orb:'<circle cx="125" cy="134" r="9"/><path d="M72 164Q111 75 125 134"/>',
+ hoops:'<ellipse cx="98" cy="144" rx="13" ry="28"/><ellipse cx="155" cy="142" rx="13" ry="28"/>',
+ contact:'<circle cx="116" cy="113" r="15"/><path d="m116 88 0-8m-20 22-8-3m47 3 8-3"/>',
+ bridge:'<path d="M37 173Q110 115 193 171M37 180Q110 122 193 178"/>',
+ veil:'<path d="M80 108Q135 78 139 170Q92 195 80 108ZM84 108l51 60"/>',
+ warmth:'<path d="M82 121Q97 94 117 111Q137 88 151 116Q160 145 117 164Q79 147 82 121Z"/>',
+ ribbon:'<path d="M36 146Q85 81 115 143T194 140M43 161Q85 105 118 155T188 155"/>',
+ nest:'<ellipse cx="108" cy="188" rx="43" ry="10"/><path d="M67 178Q109 205 150 178"/>',
+ shield:'<path d="M48 172Q40 83 113 64Q190 88 181 172Q112 198 48 172Z"/>',
+ steps:'<ellipse cx="64" cy="179" rx="17" ry="4"/><ellipse cx="116" cy="165" rx="17" ry="4"/><ellipse cx="174" cy="178" rx="17" ry="4"/>',
+ gather:'<path d="M31 140Q80 99 112 128M193 143Q152 97 112 128"/><circle cx="112" cy="128" r="13"/>',
+ splash:'<path d="M74 175q5-19 14-2q5-30 15-1q12-22 19 2M71 183q28 8 56 0"/>',
+ 'water-ring':'<ellipse cx="114" cy="131" rx="62" ry="27" transform="rotate(-22 114 131)"/>',
+ perch:'<path d="M73 124Q113 111 154 124M80 129Q114 119 148 129"/>',
+ rain:'<path d="M64 72q-13 20 0 23q13-3 0-23Zm47-13q-13 20 0 23q13-3 0-23Zm48 16q-13 20 0 23q13-3 0-23Z"/>',
+ wave:'<path d="M26 139Q77 112 113 155Q151 195 193 155Q169 201 116 175Q62 140 26 157Z"/>',
+ lift:'<path d="M55 166v-52m-8 12 8-12 8 12m97 53v-52m-8 12 8-12 8 12"/>',
+ orbit:'<ellipse cx="112" cy="145" rx="67" ry="35" transform="rotate(18 112 145)"/>',
+ 'double-touch':'<circle cx="103" cy="129" r="12"/><circle cx="135" cy="129" r="12"/>',
+ cushion:'<path d="M38 152q28 16 57 0m-57 6q28 16 57 0m35 11q29 16 58 0m-58 6q29 16 58 0"/>',
+ thread:'<path d="M29 161Q89 81 110 145T191 105"/>',
+ balance:'<path d="M42 155h141M113 155l-12 26h25Z"/>',
+ embrace:'<path d="M60 135Q53 187 111 188Q174 187 166 135M68 139Q64 178 111 180Q162 177 158 138"/>',
+ eight:'<path d="M111 145C13 58 15 229 111 145C210 61 211 229 111 145Z"/>',
+ comet:'<path d="M28 177Q108 173 172 92m-135 98Q111 182 170 108"/>',
+ constellation:'<path d="m74 116 41-34 38 39-43 30Z"/><circle cx="74" cy="116" r="3"/><circle cx="115" cy="82" r="3"/><circle cx="153" cy="121" r="3"/>',
+ crown:'<path d="m72 93 2-30 23 19 16-27 16 27 25-19-3 30Z"/>',
+ peek:'<path d="M92 105q-25 36 0 75m8-71q-20 32 0 67"/>',
+ 'triple-touch':'<path d="M112 107v20m-10-10h20m-41 9v16m-8-8h16m54-8v16m-8-8h16"/>',
+ tug:'<path d="M40 133Q110 160 181 134M110 151l6-54"/>',
+ reunion:'<path d="M33 104q28 52 78 51m77-55q-25 55-77 55m-1 45 1-45"/>',
+ curtain:'<path d="M52 74q60 18 122 0M57 77v70m25-65v30m32-27v46m30-49v30m25-34v69"/>'
+};
+function abilityInteractionEligible(p,hover=false){
+ return !paused&&!motionQuery.matches&&!document.hidden&&!window.HavenRouteBusy&&!document.querySelector('dialog[open]')&&p.present&&p.poseReady&&!p.drag&&!p.dragCandidate&&!p.gatherScene&&!p.visitScene&&!p.dash&&!p.action&&selectedPet!==p&&!(chaseScene&&(chaseScene.leader===p||chaseScene.follower===p))&&(hover||!p.hover&&!p.focus)&&performance.now()>=(p.nextAbilityInteraction||0);
+}
+function stopAbilityInteraction(reason='complete'){
+ const scene=activeAbilityInteraction;if(!scene)return;
+ activeAbilityInteraction=null;const p=scene.pet;
+ scene.animations.forEach(a=>a.cancel());scene.fx.remove();p.abilityScene=null;p.el.classList.remove('ability-playing');delete p.el.dataset.abilityInteraction;
+ p.nextAbilityInteraction=performance.now()+9000;p.resumeFrom={x:p.x,y:p.y,at:elapsed+.2};p.returnHold=elapsed+.2;p.nextMeeting=elapsed+4;
+ setEmote(p,scene.previousEmote);p.el.dataset.state=p.hover||p.focus?'hover':'walk';
+ nextAbilityInteraction=performance.now()+(reason==='complete'?6000:2500);
+}
+function startAbilityInteraction(p,index=null,source='ambient'){
+ if(activeAbilityInteraction||!abilityInteractionEligible(p,source==='hover'))return false;
+ if(index===null){
+  if(!p.abilityDeck?.length){p.abilityDeck=[0,1,2,3,4,5,6,7];for(let i=7;i>0;i--){const j=Math.floor(Math.random()*(i+1));[p.abilityDeck[i],p.abilityDeck[j]]=[p.abilityDeck[j],p.abilityDeck[i]];}if(p.abilityDeck.at(-1)===p.lastAbilityInteraction)[p.abilityDeck[0],p.abilityDeck[7]]=[p.abilityDeck[7],p.abilityDeck[0]];}
+  index=p.abilityDeck.pop();
+ }
+ const script=abilityInteractionBank[p.member.id][index];if(!script)return false;
+ const duration=4200,now=performance.now(),animations=[],previousEmote=p.el.querySelector('.emote').textContent;
+ p.lastAbilityInteraction=index;p.el.dataset.abilityInteraction=script.id;p.el.classList.add('ability-playing');p.el.dataset.state='hover';setEmote(p,script.line);
+ const fx=document.createElement('span');fx.className='ability-interaction-fx';fx.setAttribute('aria-hidden','true');fx.dataset.motif=script.fx;
+ fx.innerHTML='<svg viewBox="0 0 220 240"><g class="interaction-shape">'+interactionPaths[script.fx]+'</g></svg>';
+ p.el.append(fx);
+ const mobile=innerWidth<=800?.8:1;
+ script.tracks.forEach((track,i)=>{
+  const node=p.companionRoot.children[i];if(!node)return;
+  const frames=track.map(([x,y,angle=0,opacity=1],j)=>({offset:j/(track.length-1),transform:`translate3d(${x*mobile}px,${y*mobile}px,0) rotate(${angle}deg)`,opacity}));
+  animations.push(node.animate(frames,{duration,easing:'ease-in-out',fill:'none'}));
+ });
+ animations.push(fx.animate([{opacity:0,transform:'scale(.86)'},{opacity:.9,transform:'scale(1)',offset:.18},{opacity:.75,transform:'scale(1.03)',offset:.72},{opacity:0,transform:'scale(1.08)'}],{duration,fill:'none'}));
+ if(script.fx==='orb')animations.push(fx.querySelector('circle').animate([
+  {transform:'translate(0,-18px)',opacity:0},{transform:'translate(0,0)',opacity:1,offset:.5},
+  {transform:'translate(-32px,-26px)',opacity:1,offset:.76},{transform:'translate(-32px,-26px)',opacity:0}
+ ],{duration,easing:'ease-in-out'}));
+ p.abilityScene={pet:p,script,index,start:now,duration,animations,fx,previousEmote,pose:script.poses[0]};activeAbilityInteraction=p.abilityScene;
+ p.lookDirection=1;p.nextDash=elapsed+14;
+ return true;
+}
+function advanceAbilityInteraction(p,now,modalOpen){
+ const scene=p.abilityScene;if(!scene)return false;
+ if(paused||motionQuery.matches||document.hidden||modalOpen||p.drag||p.gatherScene||p.visitScene||selectedPet===p){stopAbilityInteraction('interrupted');return false;}
+ const progress=(now-scene.start)/scene.duration;
+ if(progress>=1){stopAbilityInteraction();return false;}
+ const phase=Math.min(2,Math.floor(progress*3));scene.pose=scene.script.poses[phase];
+ if(scene.phase!==phase){scene.phase=phase;p.poseKind=null;}
+ // 손을 내미는 상대에 맞춰 시선도 바꾼다.
+ p.lookDirection=phase===1&&['orbit-swap','cat-balance','star-tug','sibling-peace'].includes(scene.script.id)?-1:1;
+ renderPetPose(p,{held:true,now});fitPetBubble(p);return true;
+}
+function abilityInteractionScheduler(now){
+ if(activeAbilityInteraction||now<nextAbilityInteraction)return;
+ nextAbilityInteraction=now+1800;
+ const hovered=pets.find(p=>(p.hover||p.focus)&&now-(p.abilityHoverAt||now)>650&&abilityInteractionEligible(p,true));
+ if(hovered){startAbilityInteraction(hovered,null,'hover');return;}
+ const candidates=pets.filter(p=>abilityInteractionEligible(p)&&!blocked(p)&&p.x>35&&p.x<innerWidth-bounds().size-35&&p.y>125);
+ if(candidates.length&&startAbilityInteraction(candidates[Math.floor(Math.random()*candidates.length)]))nextAbilityInteraction=now+10000;
+}
+pets.forEach(p=>{
+ p.trigger.addEventListener('pointerenter',()=>{p.abilityHoverAt=performance.now()},{passive:true});
+ p.trigger.addEventListener('focus',()=>{p.abilityHoverAt=performance.now()});
+});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)stopAbilityInteraction('hidden')});
+addEventListener('resize',()=>stopAbilityInteraction('resize'));
 
 // 원화 네 장과 기존 단체 무대 이미지의 전환. 캐릭터 보행을 흉내 내지 않는다.
 registerPageMount(()=>{
@@ -928,6 +1074,7 @@ function releaseGather(){
  announce('리틀 HAVEN이 다시 산책합니다.');
 }
 function gatherPets(){
+ stopAbilityInteraction('gather');
  if(pets.some(p=>p.gatherScene)){releaseGather();return;}
  closePet();stopChase();const slots=gatherSlots();gatherRound++;
  pets.forEach((p,i)=>{
