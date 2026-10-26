@@ -70,16 +70,17 @@ const pets=members.map((member,i)=>{
  installDrag(p);
  return p;
 });
-// 멤버 동작 메뉴 안에서 전체 리틀 HAVEN에 적용하는 표시 설정.
-const overlapSetting=document.createElement('label');overlapSetting.className='pet-overlap-setting';
-const overlapToggle=document.createElement('input');overlapToggle.type='checkbox';overlapToggle.checked=petOverlapFade;overlapToggle.id='pet-overlap-fade';
-const overlapLabel=document.createElement('span');overlapLabel.textContent='겹칠 때 반투명';overlapSetting.append(overlapLabel,overlapToggle);popover.querySelector('.actions').after(overlapSetting);
+// 집합 버튼 옆에서 언제든 바꿀 수 있는 전체 리틀 HAVEN 표시 설정.
+const overlapToggle=document.createElement('button');overlapToggle.type='button';overlapToggle.className='pet-overlap-setting';overlapToggle.id='pet-overlap-fade';overlapToggle.textContent='반투명';
+overlapToggle.setAttribute('aria-pressed',String(petOverlapFade));overlapToggle.setAttribute('aria-label','리틀 HAVEN 반투명');
+const littleControls=document.createElement('div');littleControls.className='little-haven-controls';littleControls.setAttribute('role','group');littleControls.setAttribute('aria-label','리틀 HAVEN 설정');
+const gatherControl=document.querySelector('#little-gather');gatherControl.before(littleControls);littleControls.append(overlapToggle,gatherControl);
 function applyOverlapPreference(value,persist=true){
- petOverlapFade=value;overlapToggle.checked=value;
+ petOverlapFade=value;overlapToggle.setAttribute('aria-pressed',String(value));
  if(persist)try{localStorage.setItem('haven-overlap-fade',value?'on':'off')}catch{}
  pets.forEach(p=>{if(!p.present)return;if(!value)p.el.style.opacity='1';else if(!p.drag&&!p.visitScene&&!p.gatherScene&&!p.abilityScene&&selectedPet!==p)p.el.style.opacity=blocked(p)?'.55':'1';});
 }
-overlapToggle.addEventListener('change',()=>applyOverlapPreference(overlapToggle.checked));
+overlapToggle.addEventListener('click',()=>applyOverlapPreference(!petOverlapFade));
 addEventListener('storage',e=>{if(e.key==='haven-overlap-fade'||e.key===null)applyOverlapPreference(e.newValue!=='off',false)});
 function rectFor(p,index){return p.member.frames[Math.min(index,p.member.frames.length-1)]}
 function draw(p,index,kind='motion',facing=0){
