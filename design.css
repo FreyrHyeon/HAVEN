@@ -676,5 +676,45 @@ body[data-resonance=serian] .companion-white-cat,body[data-resonance=serian] .co
 .pet[data-present=false] .pet-companion,.pet[data-present=false] .pet-companion *,.pet-scene-hidden .pet-companion,.pet-scene-hidden .pet-companion *,.motion-paused .pet-companion,.motion-paused .pet-companion *{animation-play-state:paused!important}
 @media(max-width:800px){.pet-companion{width:28px;height:28px}.companion-black-cat{left:53px;top:47px}.companion-foxcat{top:43px}.companion-star-1{left:52px;top:43px}.companion-star-2{top:58px}.companion-guardian{left:-10px;top:15px}.pet[data-travel-direction=right] .companion-guardian{left:52px}.companion-second,.companion-third{top:50px;width:24px;height:24px}}
 @media(prefers-reduced-motion:reduce){.pet-companion,.pet-companion *{animation:none!important;transition:none!important}}
+/* 움직이는 빛은 합성 가능한 transform으로, 읽는 글자는 평소 고정한다. */
+.ambient:after{background-image:url('assets/ambient-grain.png');background-size:180px 180px}
+@keyframes companion-float{0%,100%{transform:translate3d(0,0,0)}50%{transform:translate3d(0,-5px,0)}}
+@keyframes companion-tail{50%{transform:rotate(8deg)}}
+@keyframes cat-hover-white{0%,100%{transform:translate3d(0,2px,0)}50%{transform:translate3d(2px,-6px,0)}}
+@keyframes cat-hover-black{0%,100%{transform:translate3d(0,-3px,0)}50%{transform:translate3d(-2px,3px,0)}}
+@keyframes bird-wingbeat{to{transform:rotate(-14deg) scale(1,.7)}}
+@keyframes guardian-watch{50%{transform:translate3d(0,-3px,0)}}
+@keyframes bird-squabble-one{0%,100%{transform:translate3d(-5px,2px,0)}30%{transform:translate3d(5px,-5px,0)}46%{transform:translate3d(7px,-2px,0)}65%{transform:translate3d(0,3px,0)}}
+@keyframes bird-squabble-two{0%,100%{transform:translate3d(8px,-4px,0)}30%{transform:translate3d(-3px,2px,0)}46%{transform:translate3d(-5px,-2px,0)}65%{transform:translate3d(4px,-6px,0)}}
+@keyframes star-companion-one{0%,100%{transform:translate3d(0,0,0) rotate(-8deg)}50%{transform:translate3d(6px,-8px,0) rotate(10deg)}}
+@keyframes star-companion-two{0%,100%{transform:translate3d(0,-3px,0) rotate(9deg)}50%{transform:translate3d(-3px,4px,0) rotate(-9deg)}}
+@keyframes star-companion-three{0%,100%{transform:translate3d(-3px,0,0) rotate(2deg)}50%{transform:translate3d(6px,-3px,0) rotate(-10deg)}}
+@keyframes ability-arrive{0%{opacity:0;transform:scale(.84)}15%{opacity:.86;transform:scale(1)}75%{opacity:.72}100%{opacity:0;transform:translate3d(0,-9px,0) scale(1.08)}}
+@keyframes seven-spark{0%{opacity:0;transform:translate3d(0,6px,0) scale(.2)}22%{opacity:1;transform:scale(1)}100%{opacity:0;transform:translate3d(var(--spark-drift),-16px,0) scale(.4)}}
+.type-shimmer:after,.section-jump a:before{animation:none;background-position:50% 0;opacity:0}
+a:hover .type-shimmer:after,button:hover .type-shimmer:after,a:focus-visible .type-shimmer:after,button:focus-visible .type-shimmer:after{animation:copy-light-pass 3.2s linear 1;opacity:.85}
+.section-jump a:before{animation:none}
+.type-seven-glow{animation:none!important;opacity:.13}
+.type-seven-wrap,.type-seven-wrap[data-power]{filter:none;transition:opacity .45s}
+.type-seven-ink{mix-blend-mode:normal}
+.card-flow-fx,.member-card:hover .card-flow-fx,.member-card:focus-visible .card-flow-fx,.member-card.is-light-active .card-flow-fx{filter:none!important;contain:layout paint style}
+.edge-orbit{position:absolute;inset:2px;padding:2px;border-radius:28px 28px 3px 3px;overflow:hidden;mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);mask-composite:exclude;-webkit-mask-composite:xor;pointer-events:none}
+.edge-orbit-inner{inset:10px;padding:1px;border-radius:22px 22px 2px 2px;opacity:.85}
+.edge-orbit i{position:absolute;width:240%;height:240%;left:-70%;top:-70%;background:conic-gradient(from 0deg,transparent 0deg 270deg,var(--member,#f2a6b2) 305deg,#fff4df 325deg,transparent 340deg);animation:edge-orbit-turn 5s linear infinite;will-change:transform}
+.edge-orbit-inner i{background:conic-gradient(from 180deg,transparent 0deg 290deg,#fff5df 315deg,transparent 335deg);animation-duration:5s}
+@keyframes edge-orbit-turn{to{transform:rotate(1turn)}}
+.pet-ability-fx{animation-duration:1.35s;contain:layout style;will-change:transform,opacity;filter:none!important}
+.pet-ability-fx.ability-burst{animation-duration:2.3s}
+.pet-ability-fx:not(.ability-burst) *{animation:none!important}
+.pet-companion{will-change:transform}
+.pet[data-present=false] .pet-companion{will-change:auto}
+.bird-wing{animation-timing-function:steps(2,end);animation-duration:.48s}
+.portrait-reaction:not(.expression-active) .reaction-blush{will-change:auto}
+.fx-economy .pet-companion .companion-tail,.fx-economy .pet-companion .bird-wing{animation:none}
+.fx-economy .type-seven-wrap:not([data-power]){will-change:auto}
+.fx-economy .pet-ability-fx svg *{animation:none!important}
+.fx-economy .resonance-fx:not(.card-flow-fx) i{animation-timing-function:steps(4,end)}
+.page-hidden .edge-orbit i,.fx-idle .edge-orbit i{animation-play-state:paused!important;will-change:auto}
+@media(prefers-reduced-motion:reduce){.edge-orbit i{animation:none!important;will-change:auto}.pet-ability-fx{display:none!important}}
 
 .btn,.member-card{border-radius:var(--radius,3px)}.hero-tagline{color:var(--paper)}body[data-theme=impact] .section-heading h2,body[data-theme=signal] .section-heading h2{font-family:Arial,sans-serif;font-weight:800;font-style:normal;letter-spacing:-.07em}body[data-theme=impact] .hero-center{transform:skewY(-2deg)}body[data-theme=pulse] .member-card,body[data-theme=flow] .member-card{border-radius:100px 100px 4px 4px}body[data-theme=signature] .hero-tagline{letter-spacing:.12em;font-weight:300}body[data-theme=beam] .orbit{border-radius:0;height:170px;transform:rotate(-11deg)}body[data-theme=core] .ambient:after{opacity:.3}body[data-theme=signal] .hero-logo{max-width:660px;max-height:360px;object-fit:contain}body[data-theme=signal] .hero-center{padding:10px 0}body[data-theme=signal] .btn.primary{background:var(--cyan);border-color:var(--cyan)}body[data-theme=pulse] .section-heading h2,body[data-theme=flow] .section-heading h2{font-family:Arial,sans-serif;font-weight:300;letter-spacing:-.07em}
