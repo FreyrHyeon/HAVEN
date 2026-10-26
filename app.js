@@ -12,6 +12,8 @@ window.HavenBeforePageSwap=()=>{stopAbilityInteraction('navigation');document.qu
 const members = window.HAVEN_MEMBERS;
 const motionQuery=matchMedia('(prefers-reduced-motion: reduce)');
 let paused=motionQuery.matches;
+let petOverlapFade=true;
+try{petOverlapFade=localStorage.getItem('haven-overlap-fade')!=='off'}catch{}
 // 움직임 설정 버튼을 없앴으므로 과거의 숨은 일시정지 값은 읽지 않는다.
 const petLayer=document.querySelector('.pet-layer');
 const trailLayer=document.querySelector('.trail-layer');
@@ -68,6 +70,17 @@ const pets=members.map((member,i)=>{
  installDrag(p);
  return p;
 });
+// 멤버 동작 메뉴 안에서 전체 리틀 HAVEN에 적용하는 표시 설정.
+const overlapSetting=document.createElement('label');overlapSetting.className='pet-overlap-setting';
+const overlapToggle=document.createElement('input');overlapToggle.type='checkbox';overlapToggle.checked=petOverlapFade;overlapToggle.id='pet-overlap-fade';
+const overlapLabel=document.createElement('span');overlapLabel.textContent='겹칠 때 반투명';overlapSetting.append(overlapLabel,overlapToggle);popover.querySelector('.actions').after(overlapSetting);
+function applyOverlapPreference(value,persist=true){
+ petOverlapFade=value;overlapToggle.checked=value;
+ if(persist)try{localStorage.setItem('haven-overlap-fade',value?'on':'off')}catch{}
+ pets.forEach(p=>{if(!p.present)return;if(!value)p.el.style.opacity='1';else if(!p.drag&&!p.visitScene&&!p.gatherScene&&!p.abilityScene&&selectedPet!==p)p.el.style.opacity=blocked(p)?'.55':'1';});
+}
+overlapToggle.addEventListener('change',()=>applyOverlapPreference(overlapToggle.checked));
+addEventListener('storage',e=>{if(e.key==='haven-overlap-fade'||e.key===null)applyOverlapPreference(e.newValue!=='off',false)});
 function rectFor(p,index){return p.member.frames[Math.min(index,p.member.frames.length-1)]}
 function draw(p,index,kind='motion',facing=0){
  const flip=facing>0&&(kind==='chase'||kind==='pose'&&index>=8);
@@ -224,7 +237,7 @@ function advanceChase(dt){
  a.x=((cx+size)%span+span)%span-size;a.y=Math.max(125,Math.min(h-size-95,c.y+Math.sin(c.t*2.5)*36));
  c.history.push({t:c.t,x:cx,y:a.y});const target=c.history.findLast(q=>q.t<=c.t-.48)||c.history[0];
  c.followerRawX+=(target.x-c.followerRawX)*Math.min(dt*9,1);b.x=((c.followerRawX+size)%span+span)%span-size;b.y+=(target.y-b.y)*Math.min(dt*9,1);
- for(const p of [a,b]){p.el.style.transform='translate('+Math.round(p.x)+'px,'+Math.round(p.y)+'px)';p.el.style.opacity=blocked(p)?'.55':'1';p.el.style.pointerEvents=blocked(p)?'none':'';}
+ for(const p of [a,b]){p.el.style.transform='translate('+Math.round(p.x)+'px,'+Math.round(p.y)+'px)';p.el.style.opacity=blocked(p)&&petOverlapFade?'.55':'1';p.el.style.pointerEvents=blocked(p)?'none':'';}
  const protest=c.t>1.15&&c.t<2.65;
  if(protest&&!a.protesting){a.protesting=true;a.el.classList.add('protesting');setEmote(a,'언니, 그만 쫓아와!');b.el.dataset.state='wave';setEmote(b,'♡');b.el.classList.add('chase-answer')}
  if(!protest&&a.protesting){a.protesting=false;a.el.classList.remove('protesting');b.el.classList.remove('chase-answer')}
@@ -274,7 +287,7 @@ function animate(now){
    p.clock+=dt*1.8*(p.index===1?1.45:p.index===2?.8:1);
    position(p);
    // 넘나드는 경로에서도 링크·버튼 위에 머무르지 않는다.
-   if(blocked(p)){p.el.style.pointerEvents='none';p.el.style.opacity='.55'}else{p.el.style.pointerEvents='';p.el.style.opacity='1'}
+   if(blocked(p)){p.el.style.pointerEvents='none';p.el.style.opacity=petOverlapFade?'.55':'1'}else{p.el.style.pointerEvents='';p.el.style.opacity='1'}
   }
   if(!p.el.style.transform)position(p);
   if(p.landUntil&&now>p.landUntil){p.el.classList.remove('landing');p.landUntil=0;react(p,p.hover?'hover':'walk')}
