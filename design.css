@@ -602,10 +602,7 @@ html.page-transition-active .hero-logo,html.page-transition-active .banner-light
 .pet.landing[data-pose] canvas{animation:little-land .43s ease-out}
 .pet[data-meeting=true][data-pose] canvas{rotate:0deg}
 .pet.dragging[data-pose] canvas{rotate:var(--drag-tilt,0deg);translate:0 -7px;animation:little-dangle .6s steps(2) infinite}
-.pet-reaction-icon{position:absolute;right:-3px;top:7px;z-index:4;min-width:24px;line-height:1.2;font:20px/1.2 'Segoe UI Emoji','Apple Color Emoji','Noto Color Emoji',sans-serif;white-space:nowrap;pointer-events:none;opacity:0;translate:0 5px;scale:.9;transition:opacity .18s,translate .25s,scale .25s;filter:drop-shadow(0 2px 3px #0008)}
-.pet.has-reaction .pet-reaction-icon{opacity:1;translate:0 0;scale:1}
 .pet[data-state=hug] .emote{opacity:1}
-@media(prefers-reduced-motion:reduce){.pet-reaction-icon{transition:none}}
 .pet-ability-fx{position:fixed;width:var(--ability-size);height:var(--ability-size);pointer-events:none;color:var(--ability-tone);opacity:0;animation:ability-arrive 1.65s cubic-bezier(.2,.65,.2,1) forwards;filter:drop-shadow(0 0 4px color-mix(in srgb,var(--ability-tone) 60%,transparent))}
 .pet-ability-fx.ability-burst{animation-duration:2.6s;filter:drop-shadow(0 0 6px color-mix(in srgb,var(--ability-tone) 75%,transparent))}
 .pet-ability-fx svg{width:100%;height:100%;overflow:visible;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
@@ -626,9 +623,6 @@ html.page-transition-active .hero-logo,html.page-transition-active .banner-light
 @keyframes ability-ripple{from{scale:.25 .6;opacity:.95}to{scale:1.3 1.05;opacity:0}}
 @keyframes ability-droplet{0%{translate:0 14px;opacity:0}30%{opacity:1}100%{translate:0 -22px;opacity:0}}
 .telekinetic-thread{stroke:#e7b7e5;stroke-width:1.3;stroke-dasharray:60 90;animation:ability-light-run 2s ease-in-out both}
-.floating-stone{fill:#9f769ac0;stroke:#f8d2e8;stroke-width:1.8;transform-box:fill-box;transform-origin:center;animation:ability-levitate 2.4s ease-in-out both}
-.stone-facet{fill:none;stroke:#f5c7e4;stroke-width:1}
-.stone-two{animation-delay:.22s;fill:#c7a0b380}
 @keyframes ability-levitate{0%{translate:0 16px;rotate:-8deg}45%{translate:0 -9px;rotate:6deg}100%{translate:0 -17px;rotate:-3deg}}
 .star-path{stroke:#cdeafa80;stroke-width:1;stroke-dasharray:3 12;animation:ability-light-run 2.4s ease-out both}
 .free-star{stroke:#fff6de;stroke-width:1.2;fill:#ffd892;transform-box:fill-box;transform-origin:center;animation:ability-star-roam 2.4s ease-in-out both}
@@ -637,5 +631,50 @@ html.page-transition-active .hero-logo,html.page-transition-active .banner-light
 .star-twinkle{stroke:#fff4dc;stroke-width:1.6;animation:ability-spark 2s ease-in-out both}
 @keyframes ability-star-roam{0%{translate:-5px 14px;rotate:-16deg;scale:.7}50%{translate:9px -7px;rotate:12deg;scale:1.08}100%{translate:-1px -21px;rotate:28deg;scale:.85}}
 @media(prefers-reduced-motion:reduce){.pet-ability-fx{display:none!important}}
+.pet-companions{position:absolute;inset:0;pointer-events:none;z-index:2}
+.pet-companion{position:absolute;width:34px;height:34px;pointer-events:none;transition:left .35s ease,top .35s ease;filter:drop-shadow(0 2px 2px #0007)}
+.pet-companion svg{display:block;width:100%;height:100%;overflow:visible;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.6}
+.companion-foxcat{left:-13px;top:54px;fill:#eac2b5;stroke:#fff0db;filter:drop-shadow(0 0 4px #efbd9b70);animation:companion-float 3.2s ease-in-out infinite}
+.companion-foxcat .spirit-tail-tip{fill:#fff4e4;stroke:none}
+.companion-foxcat .companion-eyes,.companion-foxcat .companion-mouth{fill:none;stroke:#895666;stroke-width:1.8}
+.companion-foxcat .companion-nose{fill:#895666;stroke:none}
+.companion-tail{transform-box:fill-box;transform-origin:0 75%;animation:companion-tail 2.6s ease-in-out infinite}
+@keyframes companion-tail{50%{rotate:8deg}}
+@keyframes companion-float{0%,100%{translate:0 0}50%{translate:0 -5px}}
+.companion-white-cat{left:-16px;top:39px;fill:#fff9ef;stroke:#9a9baa;animation:cat-hover-white 3.1s ease-in-out infinite}
+.companion-black-cat{left:67px;top:58px;fill:#252331;stroke:#e3d6ee;animation:cat-hover-black 3.7s ease-in-out infinite}
+.companion-white-cat .companion-eyes,.companion-white-cat .companion-mouth{fill:none;stroke:#606077;stroke-width:1.8}
+.companion-black-cat .companion-eyes,.companion-black-cat .companion-mouth{fill:none;stroke:#fff0dc;stroke-width:1.8}
+.companion-nose{fill:currentColor;stroke:none}
+@keyframes cat-hover-white{0%,100%{translate:0 2px}50%{translate:2px -6px}}
+@keyframes cat-hover-black{0%,100%{translate:0 -3px}50%{translate:-2px 3px}}
+body[data-resonance=serian] .companion-white-cat,body[data-resonance=serian] .companion-black-cat{filter:drop-shadow(0 0 4px #d1a6e4b0)}
+.companion-guardian,.companion-second,.companion-third{fill:#6ec2ed;stroke:#d2f2ff;stroke-width:1.2}
+.companion-guardian{width:32px;height:32px;left:-14px;top:19px;animation:guardian-watch 2.8s ease-in-out infinite}
+.pet[data-travel-direction=right] .companion-guardian{left:68px}
+.pet[data-travel-direction=right] .companion-guardian svg{scale:-1 1}
+.pet[data-pose=look] .companion-guardian,.pet[data-pose=listen] .companion-guardian{top:12px}
+.companion-second,.companion-third{width:27px;height:27px;left:-12px;top:63px}
+.companion-second{fill:#478fcf;animation:bird-squabble-one 4.8s ease-in-out infinite}
+.companion-third{fill:#9bddf0;left:18px;animation:bird-squabble-two 4.8s ease-in-out infinite}
+.companion-second svg{scale:-1 1}
+.bird-wing{fill:#9cdff6;transform-box:fill-box;transform-origin:10% 85%;animation:bird-wingbeat .32s ease-in-out infinite alternate}
+.bird-feather{fill:none;stroke:#e7faff;stroke-width:.8}
+.bird-eye{fill:#28475d;stroke:none}.bird-beak{fill:#f1d5a6;stroke:none}.bird-feet{stroke:#8392ae;stroke-width:1}
+@keyframes bird-wingbeat{to{rotate:-14deg;scale:1 .7}}
+@keyframes guardian-watch{50%{translate:0 -3px}}
+@keyframes bird-squabble-one{0%,100%{translate:-5px 2px}30%{translate:5px -5px}46%{translate:7px -2px}65%{translate:0 3px}}
+@keyframes bird-squabble-two{0%,100%{translate:8px -4px}30%{translate:-3px 2px}46%{translate:-5px -2px}65%{translate:4px -6px}}
+.companion-star{width:25px;height:25px;fill:#f3dc9c;stroke:#fff4d8;stroke-width:1.2}
+.star-spirit-face{fill:none;stroke:#8c7495;stroke-width:2}
+.companion-star-0{left:-12px;top:30px;animation:star-companion-one 3.3s ease-in-out infinite}
+.companion-star-1{left:64px;top:54px;fill:#b0dce9;stroke:#e5faff;animation:star-companion-two 4.1s ease-in-out infinite}
+.companion-star-2{left:12px;top:75px;fill:#d4b8ec;stroke:#f4e7ff;animation:star-companion-three 3.7s ease-in-out infinite}
+@keyframes star-companion-one{0%,100%{translate:0 0;rotate:-8deg}50%{translate:6px -8px;rotate:10deg}}
+@keyframes star-companion-two{0%,100%{translate:0 -3px;rotate:9deg}50%{translate:-3px 4px;rotate:-9deg}}
+@keyframes star-companion-three{0%,100%{translate:-3px 0;rotate:2deg}50%{translate:6px -3px;rotate:-10deg}}
+.pet[data-present=false] .pet-companion,.pet[data-present=false] .pet-companion *,.pet-scene-hidden .pet-companion,.pet-scene-hidden .pet-companion *,.motion-paused .pet-companion,.motion-paused .pet-companion *{animation-play-state:paused!important}
+@media(max-width:800px){.pet-companion{width:28px;height:28px}.companion-black-cat{left:53px;top:47px}.companion-foxcat{top:43px}.companion-star-1{left:52px;top:43px}.companion-star-2{top:58px}.companion-guardian{left:-10px;top:15px}.pet[data-travel-direction=right] .companion-guardian{left:52px}.companion-second,.companion-third{top:50px;width:24px;height:24px}}
+@media(prefers-reduced-motion:reduce){.pet-companion,.pet-companion *{animation:none!important;transition:none!important}}
 
 .btn,.member-card{border-radius:var(--radius,3px)}.hero-tagline{color:var(--paper)}body[data-theme=impact] .section-heading h2,body[data-theme=signal] .section-heading h2{font-family:Arial,sans-serif;font-weight:800;font-style:normal;letter-spacing:-.07em}body[data-theme=impact] .hero-center{transform:skewY(-2deg)}body[data-theme=pulse] .member-card,body[data-theme=flow] .member-card{border-radius:100px 100px 4px 4px}body[data-theme=signature] .hero-tagline{letter-spacing:.12em;font-weight:300}body[data-theme=beam] .orbit{border-radius:0;height:170px;transform:rotate(-11deg)}body[data-theme=core] .ambient:after{opacity:.3}body[data-theme=signal] .hero-logo{max-width:660px;max-height:360px;object-fit:contain}body[data-theme=signal] .hero-center{padding:10px 0}body[data-theme=signal] .btn.primary{background:var(--cyan);border-color:var(--cyan)}body[data-theme=pulse] .section-heading h2,body[data-theme=flow] .section-heading h2{font-family:Arial,sans-serif;font-weight:300;letter-spacing:-.07em}

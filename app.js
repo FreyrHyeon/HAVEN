@@ -54,13 +54,10 @@ const pets=members.map((member,i)=>{
  const trigger=document.createElement('button');trigger.type='button';trigger.className='pet-trigger';trigger.dataset.name=member.ko;trigger.setAttribute('aria-label',member.ko+((member.ko.charCodeAt(member.ko.length-1)-0xac00)%28?'과':'와')+' 상호작용');trigger.setAttribute('aria-expanded','false');trigger.setAttribute('aria-controls','pet-popover');
  const canvas=document.createElement('canvas');canvas.width=192;canvas.height=192;canvas.setAttribute('aria-hidden','true');trigger.append(canvas);
  const emote=document.createElement('span');emote.className='emote';emote.setAttribute('aria-hidden','true');emote.textContent=member.emote;trigger.append(emote);el.append(trigger);petLayer.append(el);
- const reactionIcon=document.createElement('span');reactionIcon.className='pet-reaction-icon';reactionIcon.setAttribute('aria-hidden','true');trigger.append(reactionIcon);
  const image=new Image();image.src=member.atlas;const ctx=canvas.getContext('2d');ctx.imageSmoothingEnabled=false;
  const p={member,el,trigger,canvas,ctx,image,x:0,y:0,clock:i*7+Math.random()*35,hover:false,focus:false,action:null,actionUntil:0,lastEmit:0,ready:false,index:i,dash:null,nextDash:12+i*7,present:false,nextMeeting:0,meetingUntil:0};
- p.reactionIcon=reactionIcon;
  el.dataset.present='false';
  image.onload=()=>{p.ready=true;draw(p,0)};
- if(member.poseAtlas){p.poseImage=new Image();p.poseImage.src=member.poseAtlas;p.poseImage.onload=()=>{p.poseReady=true;p.lastDrawn=null;draw(p,0,'pose')}}
  if(member.extraAtlas){p.extraImage=new Image();p.extraImage.src=member.extraAtlas;p.extraImage.onload=()=>{p.lastDrawn=null}}
  trigger.addEventListener('pointerenter',e=>{if(e.pointerType!=='touch'){p.hover=true;if(!p.drag)react(p,'hover')}});
  trigger.addEventListener('pointerleave',()=>{p.hover=false;if(!p.focus&&selectedPet!==p&&!p.action)el.dataset.state='walk'});
@@ -93,7 +90,6 @@ function installDrag(p){
    if(p.gatherScene)releaseGatherPet(p);
    closePet();cancelVisit(p);if(chaseScene&&(chaseScene.leader===p||chaseScene.follower===p))stopChase();
    p.dash=null;p.el.classList.remove('dashing');p.action=null;p.drag=true;p.el.dataset.state='drag';p.el.classList.add('dragging');p.el.style.opacity='1';p.el.style.pointerEvents='';setEmote(p,'!');
-   showPetReaction(p,'drag');
    eventLog('haven_character_drag_start',{member_id:p.member.id});
   }
   if(!p.drag)return;e.preventDefault();
@@ -114,7 +110,6 @@ function installDrag(p){
 }
 function react(p,state){
  p.el.dataset.state=state;setEmote(p,state==='sing'?'♪ ♫':state==='heart'?'♥':state==='wave'?'안녕':p.member.emote);
- if(state!=='walk'&&state!=='idle')showPetReaction(p,state);
 }
 function setEmote(p,text){const bubble=p.el.querySelector('.emote');if(bubble.textContent!==text)bubble.textContent=text;bubble.dataset.short=String(text.trim().length<=4)}
 function fitPetBubble(p){
@@ -174,6 +169,7 @@ function startDash(p){
  eventLog('haven_character_interact',{member_id:p.member.id,interaction_type:'dash'});return true;
 }
 function enterPet(p,instant=false){
+ ensurePoseAtlas(p);
  p.present=true;p.el.dataset.present='true';p.el.style.opacity='1';p.el.style.pointerEvents='';p.clock=Math.random()*120;
  position(p);const home={x:p.x,y:p.y};
  if(!instant){const {w,size}=bounds(),right=Math.random()>.5;
@@ -197,6 +193,7 @@ function advanceDash(p,dt){
   d.phase=2;d.t=0;d.duration=.85;d.from=d.entry;
  }
  const target=d.phase===0?d.exit:d.home;
+ p.dashFacing=Math.sign(target.x-d.from.x)||p.facing||-1;
  const t=Math.min(d.t/d.duration,1),q=d.phase===0?t:1-Math.pow(1-t,2);
  p.x=d.from.x+(target.x-d.from.x)*q;p.y=d.from.y+(target.y-d.from.y)*q;
  p.el.style.transform='translate('+Math.round(p.x)+'px,'+Math.round(p.y)+'px)';
@@ -277,7 +274,7 @@ function animate(now){
   if(paused&&!p.action)state=p.hover||p.focus||selectedPet===p?'hover':'idle';
   const frames=state==='sing'?[6,7]:state==='wave'||state==='hover'?[4,5]:state==='heart'?[4,5]:state==='idle'?[0]:p.dash||chasing?[1,3,2,3]:p.index===1?[1,3,2,3]:[0,1,0,2];
   const ix=paused?frames[0]:frames[Math.floor(elapsed*(state==='sing'?4:p.dash||chasing?10:8))%frames.length];
-  if(!p.drag&&p.poseReady)renderPetPose(p,{moving:Math.hypot(p.x-previousX,p.y-previousY)>.15,run:!!p.dash||!!chasing,facing:chasing?chaseScene.dir:Math.sign(p.x-previousX),talking:p.el.classList.contains('talking'),held:!!held,now});
+  if(!p.drag&&p.poseReady)renderPetPose(p,{moving:Math.hypot(p.x-previousX,p.y-previousY)>.02,run:!!p.dash||!!chasing,facing:chasing?chaseScene.dir:p.dash?p.dashFacing:Math.sign(p.x-previousX),talking:p.el.classList.contains('talking'),held:!!held,now});
   else if(p.drag)draw(p,paused?0:Math.floor(elapsed*7)%4,'drag');
   else if(chasing&&p.member.id==='riela')draw(p,paused?0:Math.floor(elapsed*7)%4,'chase',chaseScene.dir);
   else draw(p,ix);
@@ -607,11 +604,19 @@ if(profileCopy){
 // 포즈는 상황별로 유지하고, 대화 중에는 같은 팔 자세에서 입만 바뀐다.
 function renderPetPose(p,{moving=false,run=false,facing=0,talking=false,held=false,now=performance.now()}={}){
  if(!p.poseReady)return;
- if(facing)p.facing=facing;
+ if(moving)p.walkingUntil=now+160;
+ if(facing){
+  if(!p.facing||run){p.facing=facing;p.pendingFacing=0;}
+  else if(facing!==p.facing){
+   if(p.pendingFacing!==facing){p.pendingFacing=facing;p.pendingFacingSince=now;}
+   if(now-p.pendingFacingSince>=280){p.facing=facing;p.pendingFacing=0;}
+  }else p.pendingFacing=0;
+ }
+ const travelDirection=p.facing>0?'right':'left';if(p.el.dataset.travelDirection!==travelDirection)p.el.dataset.travelDirection=travelDirection;
  let kind='idle';
  if(paused)kind='idle';
  else if(run&&!held)kind='run';
- else if(moving&&!held)kind='walk';
+ else if((moving||now<(p.walkingUntil||0))&&!held)kind='walk';
  else if(talking)kind='talk';
  else if(p.action==='sing')kind='sing';
  else if(p.action==='heart')kind='heart';
@@ -626,13 +631,12 @@ function renderPetPose(p,{moving=false,run=false,facing=0,talking=false,held=fal
   if(now<(p.idleExpressionUntil||0))kind=p.idleExpression;
  }
  if(p.poseKind!==kind){p.poseKind=kind;p.poseSince=now;p.el.dataset.pose=kind;
-  if(kind!=='idle'&&kind!=='walk'&&!(kind==='look'&&(p.hover||p.focus||selectedPet===p)))showPetReaction(p,kind);
   if(kind==='listen'&&p.visitScene?.target){const r=p.visitScene.target.getBoundingClientRect();p.lookDirection=r.left+r.width/2>p.x+bounds().size/2?1:-1;}
  }
  const t=(now-p.poseSince)/1000;
  let frame=0;
- if(kind==='walk')frame=8+Math.floor(elapsed*5.5)%4;
- else if(kind==='run')frame=12+Math.floor(elapsed*10)%4;
+ if(kind==='walk')frame=8+Math.floor(t*5.5)%4;
+ else if(kind==='run')frame=12+Math.floor(t*10)%4;
  else if(kind==='talk')frame=[4,4,5,5,4,5,4,4][Math.floor(t*5)%8];
  else if(kind==='think')frame=3;
  else if(kind==='look'||kind==='listen')frame=(p.lookDirection||p.facing||1)>0?2:1;
@@ -644,19 +648,38 @@ function renderPetPose(p,{moving=false,run=false,facing=0,talking=false,held=fal
 }
 pets.forEach(p=>p.trigger.addEventListener('pointermove',e=>{p.lookDirection=e.clientX<p.x+bounds().size/2?-1:1;},{passive:true}));
 
-function showPetReaction(p,state){
- if(!p.reactionIcon)return;
- const icons={hover:{loen:'☺️ ✨',yuria:'👋 💧',serian:'👀',riela:'😉 💫'}[p.member.id],look:'👀',think:'💭',listen:'👂',talk:'💬',wave:'👋',greet:'👋',heart:'💕',hug:'🫂',sing:'🎵',run:'💨',drag:'😳'};
- const text=icons[state];if(!text)return;
- clearTimeout(p.reactionTimer);p.reactionIcon.textContent=text;p.el.dataset.reaction=state;p.el.classList.add('has-reaction');
- p.reactionTimer=setTimeout(()=>{p.el.classList.remove('has-reaction');delete p.el.dataset.reaction;},state==='hover'?2400:1900);
+function ensurePoseAtlas(p){
+ if(p.poseImage||!p.member.poseAtlas)return;
+ p.poseImage=new Image();p.poseImage.decoding='async';p.poseImage.src=p.member.poseAtlas;
+ p.poseImage.onload=()=>{p.poseReady=true;p.lastDrawn=null;if(p.present)draw(p,0,'pose')};
 }
 
-// 멤버의 능력을 알아볼 수 있는 곡선·물결·별·부유 물체로 표현한다.
+// 별도 이모티콘 배지 대신 멤버와 함께 움직이는 작은 동반자를 그린다.
+const companionArt={
+ cat:'<path class="companion-tail" d="M43 44Q62 47 55 25Q52 19 48 23Q45 27 51 32Q55 40 43 39Z"/><ellipse cx="31" cy="43" rx="14" ry="11"/><path d="M17 23 18 9 29 18Q33 17 37 19L48 11 46 29Q45 40 31 40Q17 39 17 23Z"/><ellipse class="companion-paw" cx="25" cy="52" rx="5" ry="3"/><ellipse class="companion-paw" cx="39" cy="52" rx="5" ry="3"/><g class="companion-eyes"><path d="m23 27 4 1m10 0 4-1"/></g><path class="companion-nose" d="m30 31 3 0-1.5 2Z"/><path class="companion-mouth" d="M27 34q4 3 9 0"/>',
+ foxcat:'<path class="companion-tail" d="M39 43Q61 45 58 24Q57 14 49 9Q51 24 43 27Q34 31 39 43Z"/><path class="spirit-tail-tip" d="M53 22Q51 15 49 9Q59 14 58 24L53 29Z"/><ellipse cx="29" cy="43" rx="13" ry="10"/><path d="M14 24 17 4 28 17 32 17 44 5 47 26 42 32 45 34Q30 44 15 34L19 31Z"/><ellipse cx="23" cy="52" rx="4" ry="3"/><ellipse cx="36" cy="52" rx="4" ry="3"/><path class="companion-eyes" d="m22 26 4 1m10 0 4-1"/><path class="companion-nose" d="m28 31 4 0-2 2Z"/><path class="companion-mouth" d="M25 34q5 3 10 0"/>',
+ bird:'<path class="bird-tail" d="m42 38 18-8-5 12 7 3-17 5Z"/><ellipse cx="33" cy="37" rx="15" ry="12"/><circle cx="27" cy="24" r="11"/><path class="bird-beak" d="m17 24-9 4 10 2Z"/><path class="bird-wing" d="M31 33Q50 17 53 25Q54 33 36 43Q29 43 31 33Z"/><path class="bird-feather" d="M38 29 48 24M36 34l12-6"/><circle class="bird-eye" cx="24" cy="23" r="1.8"/><path class="bird-feet" d="m29 48-2 5m9-5 1 5"/>',
+ star:'<path d="m32 7 7 14 16 2-11 12 2 17-14-8-14 8 2-17L9 23l16-2Z"/><g class="star-spirit-face"><path d="M25 29v3m14-3v3M29 37q3 2 6 0"/></g>'
+};
+function companionNode(type,className,role){
+ const node=document.createElement('span');node.className='pet-companion '+className;node.dataset.role=role;
+ node.innerHTML='<svg viewBox="0 0 64 64" aria-hidden="true">'+companionArt[type]+'</svg>';return node;
+}
+pets.forEach(p=>{
+ const group=document.createElement('span');group.className='pet-companions';group.setAttribute('aria-hidden','true');
+ if(p.member.id==='loen')group.append(companionNode('foxcat','companion-foxcat','spirit'));
+ if(p.member.id==='serian')group.append(companionNode('cat','companion-white-cat','white-cat'),companionNode('cat','companion-black-cat','black-cat'));
+ if(p.member.id==='yuria')group.append(companionNode('bird','companion-guardian','guardian'),companionNode('bird','companion-second','second'),companionNode('bird','companion-third','third'));
+ if(p.member.id==='riela')for(let i=0;i<3;i++)group.append(companionNode('star','companion-star companion-star-'+i,'star-spirit'));
+ p.el.append(group);p.companionRoot=group;
+});
+document.addEventListener('visibilitychange',()=>document.body.classList.toggle('pet-scene-hidden',document.hidden));
+
+// 멤버의 능력을 알아볼 수 있는 곡선·물결·별·염동력로 표현한다.
 const petAbilityShapes={
  loen:'<path class="ability-stream stream-one" d="M10 127 Q65 20 174 61"/><path class="ability-stream stream-two" d="M17 140 Q96 42 178 94"/><path class="ability-core" d="M10 127 Q65 20 174 61"/><path class="ability-glint glint-one" d="M127 30v30m-15-15h30m-25-10 20 20m0-20-20 20"/><path class="ability-glint glint-two" d="M55 82v18m-9-9h18"/>',
  yuria:'<path class="water-body" d="M10 135 Q46 77 91 112 Q139 150 173 66 Q164 147 106 147 Q48 111 10 135Z"/><path class="water-crest" d="M10 135 Q46 77 91 112 Q139 150 173 66"/><ellipse class="water-ripple" cx="92" cy="157" rx="51" ry="9"/><path class="water-bead bead-one" d="M46 47Q29 70 46 76Q63 70 46 47Z"/><path class="water-bead bead-two" d="M144 27Q130 48 144 52Q158 48 144 27Z"/>',
- serian:'<path class="telekinetic-thread" d="M22 129 Q26 65 65 48 M108 135Q159 124 158 64"/><g class="floating-stone stone-one"><path d="m45 48 16-9 16 9v22l-16 9-16-9Z"/><path class="stone-facet" d="m45 48 16 10 16-10m-16 10v21"/></g><g class="floating-stone stone-two"><path d="m128 91 12-7 12 7v17l-12 7-12-7Z"/><path class="stone-facet" d="m128 91 12 7 12-7m-12 7v17"/></g><path class="telekinetic-thread thread-two" d="M61 82Q93 132 140 114"/>',
+ serian:'<path class="telekinetic-thread" d="M22 129 Q26 65 65 48 M108 135Q159 124 158 64"/><path class="telekinetic-thread thread-two" d="M61 82Q93 132 140 114"/>',
  riela:'<path class="star-path" d="M17 130 Q38 52 91 70 T172 33"/><g class="free-star star-one"><path d="m44 42 5 11 12 1-9 8 3 12-11-6-10 6 2-12-9-8 13-1Z"/></g><g class="free-star star-two"><path d="m118 91 4 9 11 1-8 7 2 11-9-6-10 6 3-11-8-7 10-1Z"/></g><g class="free-star star-three"><path d="m153 27 3 7 8 1-6 5 1 8-6-4-7 4 2-8-6-5 8-1Z"/></g><path class="star-twinkle" d="M79 26v15m-7-7h14M37 118v12m-6-6h12"/>'
 };
 function emitAbility(p,kind='trail'){
