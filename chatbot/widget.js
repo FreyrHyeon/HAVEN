@@ -7,7 +7,7 @@ const storageKey = site + '.guide.chat.v1';
 if (!document.querySelector('haven-guide-chat')) {
   const host = document.createElement('haven-guide-chat'); document.body.append(host);
   const root = host.attachShadow({ mode: 'open' });
-  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = new URL('widget.css', base); root.append(css);
+  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = new URL('widget.css?v=20261026-3', base); root.append(css);
   const launcher = document.createElement('button'); launcher.className = 'launcher'; launcher.textContent = '안내 채팅'; launcher.setAttribute('aria-expanded', 'false'); launcher.setAttribute('aria-controls', 'haven-chat-panel');
   launcher.disabled = true;
   const panel = document.createElement('section'); panel.id = 'haven-chat-panel'; panel.className = 'panel'; panel.hidden = true; panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', brand + ' 규칙형 안내 채팅');
