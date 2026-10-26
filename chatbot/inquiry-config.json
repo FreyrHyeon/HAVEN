@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "endpoint": "https://obifmsamlegemhjravkl.supabase.co/functions/v1/haven-api/inquiry",
+  "guideEndpoint": "https://obifmsamlegemhjravkl.supabase.co/functions/v1/haven-api/guide",
+  "apiBase": "https://obifmsamlegemhjravkl.supabase.co/functions/v1/haven-api",
+  "supabaseUrl": "https://obifmsamlegemhjravkl.supabase.co",
+  "publishableKey": "sb_publishable_FIwfadYwnSQSAPtqj7kA7w_MwmCg4cH",
+  "privacy": { "controller": "MIRAON·HAVEN 운영자(FreyrHyeon)", "purpose": "문의 확인과 답변", "items": "이름, 이메일, 문의 내용", "retention": "처리 완료 시 삭제하며, 미처리 문의도 접수일부터 최대 90일 보관 후 삭제" },
+  "unavailableMessage": "현재 문의 접수는 준비 중입니다. 기존 Supabase 문의 테이블과 개인정보 안내가 확정되지 않아 입력·전송이 잠겨 있는 상태입니다. 접수 완료 상태가 아닙니다."
+}
